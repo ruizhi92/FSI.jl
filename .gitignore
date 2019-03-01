@@ -1,0 +1,5 @@
+*/.ipynb_checkpoints
+docs/build
+*.gif
+notebook/local_run
+

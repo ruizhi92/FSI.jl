@@ -177,14 +177,9 @@ function construct_saddlesys(plan_constraints::FC,H::FH,
     B₁ᵀ, B₂ = ops
 
     # Actually call SaddleSystem
-    if TU <: Tuple
-        S = map((ui,fi,Hi,B₁ᵀi,B₂i) ->
-                    SaddleSystem((ui,fi),(Hi,B₁ᵀi,B₂i),tol=tol,issymmetric=issymmetric,isposdef=true,store=isstored,precompile=precompile),
-                      u,f,H,B₁ᵀ,B₂)
-    else
-        S = SaddleSystem((u,f),(H,x->B₁ᵀ(x),x->B₂(x)),tol=tol,
-                issymmetric=false,isposdef=true,store=true,precompile=false)
-    end
+    S = SaddleSystem((u,f),(H,x->B₁ᵀ(x),x->B₂(x)),tol=tol,
+            issymmetric=false,isposdef=true,store=true,precompile=false)
+
 
     return S, ops
 
