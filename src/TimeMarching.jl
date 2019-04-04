@@ -4,14 +4,14 @@ using Reexport
 
 import Whirl:@get, Nodes
 import Dyn3d:RKParams, TimeMarching.RK31, TimeMarching.Euler
+import Dyn3d:BodyDyn, BodyGrid
 
 export RKParams, RK31, Euler
-export IFHERKCoupled, r₁, r₂, B₂, B₁ᵀ, plan_constraints
+export IFHERK_coupled, r₁, B₂, B₁ᵀ, plan_constraints
 export F, G₁ᵀ, G₂, M⁻¹, gti, UpP, UpV, T₁ᵀ, T₂, getX̃
 
 # Functions that get extended by fluid systems
 function r₁ end
-function r₂ end
 function B₂ end
 function B₁ᵀ end
 function plan_constraints end

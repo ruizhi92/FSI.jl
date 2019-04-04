@@ -1,5 +1,3 @@
-# IFHERK
-
 """
     IFHERK(rk::u,f,Δt,plan_intfact,B₁ᵀ,B₂,r₁,r₂;[tol=1e-3])
 
@@ -25,220 +23,259 @@ if applicable.
 - `r₁` : operator acting on type `u` and `t` and returning `u`
 - `r₂` : operator acting on type `u` and `t` and returning type `f`
 """
-struct IFHERK{FH,FR1,FR2,FC,FS,TU,TF}
+struct IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR22,FS,TW,TF}
 
-  # time step size
-  Δt :: Float64
+    # time step size
+    Δt :: Float64
 
-  rk :: RKParams
-  rkdt :: RKParams
+    # rk parameters
+    rk :: RKParams
+    rkdt :: RKParams
 
-  # Integrating factors
-  H :: Vector{FH}
+    # Fluid operators
+    H :: Vector{FH}
+    B₁ᵀ :: FB1
+    B₂ :: FB2
 
-  # right hand side in the differential equations
-  r₁ :: FR1  # function of u and t, returns TU
-  r₂ :: FR2  # function of u and t, returns TF
+    # Body operators
+    M⁻¹ :: FM
+    G₁ᵀ :: FG1
+    G₂ :: FG2
+    UpP :: FUPP
+    UpV :: FUPV
 
-  # function of u and t, returns B₁ᵀ and B₂
-  plan_constraints :: FC
+    # FSI operators
+    T₁ᵀ :: FT1
+    T₂ :: FT2
+    getX̃ :: FX
 
-  # Vector of saddle-point systems
-  S :: Vector{FS}  # -B₂HB₁ᵀ
+    # right hand side operators
+    r₁₁ :: FR11
+    r₁₂ :: FR12
+    r₂₂ :: FR22
 
-  # scratch space
-  qᵢ :: TU
-  ubuffer :: TU
-  fbuffer :: TF
-  v̇ :: Vector{TU}
+    # saddle-point system
+    S :: Vector{FS}
 
-  # iterative solution tolerance
-  tol :: Float64
+    # body grid information
+    bgs :: Vector{BodyGrid}
+
+    # scratch space
+    w₀ :: TW
+    qJ₀ :: Vector{Float64}
+    v₀ :: Vector{Float64}
+    wbuffer :: TW
+    vbuffer :: Vector{Float64}
+    fbuffer :: TF
+    λbuffer :: Vector{Float64}
+    ċ :: Vector{TW}
+    vJ :: Vector{Vector{Float64}}
+    v̇ :: Vector{Vector{Float64}}
+
+    # iterative solution tolerance
+    tol :: Float64
 
 end
 
-function (::Type{IFHERK})(u::TU,f::TF,Δt::Float64,
-                          plan_intfact::FI,
-                          plan_constraints::FC,
-                          rhs::Tuple{FR1,FR2};
-                          tol::Float64=1e-3,
-                          conditioner::FP = x -> x,
-                          rk::RKParams=RK31) where {TU,TF,FI,FC,FR1,FR2,FP}
+function (::Type{IFHERK_coupled})(Δt::Float64, bd::BodyDyn, bgs::Vector{BodyGrid},
+                state::Tuple{TW,Vector{Float64},Vector{Float64},TF,Vector{Float64}},
+                fluidop::Tuple{FI,FB1,FB2},
+                bodyop::Tuple{FM,FG1,FG2,FUPP,FUPV},
+                fsiop::Tuple{FT1,FT2,FX},
+                rhs::Tuple{FR11,FR12,FR22};
+                tol::Float64=1e-3, rk::RKParams=RK31) where {TW,TF,FI,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR22}
 
-   # templates for the operators
-   # r₁ acts on TU and time, r₂ acts on TU and time
-   optypes = ((TU,Float64),(TU,Float64))
-   opnames = ("r₁","r₂")
-   ops = []
-   # check for methods for r₁ and r₂
-   for (i,typ) in enumerate(optypes)
-     if method_exists(rhs[i],typ)
-       push!(ops,rhs[i])
-     else
-       error("No valid operator for $(opnames[i]) supplied")
-     end
-   end
-   r₁, r₂ = ops
+    w, qJ, v, f, λ = state
+    plan_intfact, B₁ᵀ, B₂ = fluidop
+    M⁻¹, G₁ᵀ, G₂, UpP, UpV = bodyop
+    T₁ᵀ, T₂, getX̃ = fsiop
+    r₁₁,r₁₂,r₂₂ = rhs
 
     # scratch space
-    qᵢ = deepcopy(u)
-    ubuffer = deepcopy(u)
+    w₀ = deepcopy(w)
+    qJ₀ = deepcopy(qJ)
+    v₀ = deepcopy(v)
+    wbuffer = deepcopy(w)
+    vbuffer = deepcopy(v)
     fbuffer = deepcopy(f)
-    v̇ = [deepcopy(u) for i = 1:rk.st]
+    λbuffer = deepcopy(λ)
+    ċ = [deepcopy(w) for i = 1:rk.st]
+    v̇ = [deepcopy(v) for i = 1:rk.st]
+    vJ = [deepcopy(qJ) for i = 1:rk.st+1]
 
-    # construct an array of operators for the integrating factor. Each
-    # one can act on data of type `u` and return data of the same type.
-    # e.g. we can call Hlist[1]*u to get the result.
-    #---------------------------------------------------------------------------
+    # construct an array of operators for the integrating factor
+    # H[i-1] corresponds to H((cᵢ - cᵢ₋₁)Δt)
     dclist = diff(rk.c)
-
-    if TU <: Tuple
-      (FI <: Tuple && length(plan_intfact) == length(u)) ||
-                error("plan_intfact argument must be a tuple")
-      Hlist = [map((plan,ui) -> plan(dc*Δt,ui),plan_intfact,u) for dc in unique(dclist)]
-    else
-      Hlist = [plan_intfact(dc*Δt,u) for dc in unique(dclist)]
-    end
-
+    Hlist = [plan_intfact(dc*Δt,w) for dc in unique(dclist)]
     H = [Hlist[i] for i in indexin(dclist,unique(dclist))]
-
-    # preform the saddle-point systems
-    # these are overwritten if B₁ᵀ and B₂ vary with time
-    Slist = [construct_saddlesys(plan_constraints,H[i],u,f,0.0,
-                    tol)[1] for i=1:rk.st]
-    S = [Slist[i] for i in indexin(dclist,unique(dclist))]
-
-    htype,_ = typeof(H).parameters
-    stype,_ = typeof(S).parameters
-
 
     # fuse the time step size into the coefficients for some cost savings
     rkdt = deepcopy(rk)
     rkdt.a .*= Δt
     rkdt.c .*= Δt
 
+    # preform the saddle-point systems, they are overwritten with time
+    Slist = [construct_saddlesys(0.0,1,rkdt.a,bd,bgs,qJ,vJ,(w,v,f,λ),(H[i],B₁ᵀ,B₂),
+        (M⁻¹,G₁ᵀ,G₂,UpP,r₁₂,r₂₂),(T₁ᵀ,T₂,getX̃))[1][1] for i=1:rk.st]
+    S = [Slist[i] for i in indexin(dclist,unique(dclist))]
 
-    ifherksys = IFHERK{htype,typeof(r₁),typeof(r₂),FC,stype,TU,TF}(Δt,rk,rkdt,
-                                H,r₁,r₂,
-                                plan_constraints,S,
-                                qᵢ,ubuffer,fbuffer,v̇,
-                                tol)
+    htype,_ = typeof(H).parameters
+    stype,_ = typeof(S).parameters
+
+    # actually construct ifherk_coupled object
+    ifherksys = IFHERK_coupled{htype,typeof(B₁ᵀ),typeof(B₂),typeof(M⁻¹),typeof(G₁ᵀ),typeof(G₂),
+                    typeof(UpP),typeof(UpV),typeof(T₁ᵀ),typeof(T₂),typeof(getX̃),
+                    typeof(r₁₁),typeof(r₁₂),typeof(r₂₂),stype,TW,TF}(Δt,rk,rkdt,
+                                H,B₁ᵀ,B₂,
+                                M⁻¹,G₁ᵀ,G₂,UpP,UpV,
+                                T₁ᵀ,T₂,getX̃,
+                                r₁₁,r₁₂,r₂₂,
+                                S,bgs,
+                                w₀,qJ₀,v₀,wbuffer,vbuffer,fbuffer,λbuffer,
+                                ċ,vJ,v̇,tol)
 
     return ifherksys
 end
 
-function Base.show(io::IO, scheme::IFHERK{FH,FR1,FR2,FC,FS,TU,TF}) where {FH,FR1,FR2,FC,FS,TU,TF}
-    println(io, "Order-$(scheme.rk.st)+ IF-HERK integrator with")
-    println(io, "   State of type $TU")
-    println(io, "   Force of type $TF")
+function Base.show(io::IO, scheme::IFHERK_coupled)
+    println(io, "Stage-$(scheme.rk.st)+ IF-HERK integrator with")
     println(io, "   Time step size $(scheme.Δt)")
 end
 
-# this function will call the plan_constraints function and return the
-# saddle point system for a single instance of H, (and B₁ᵀ and B₂)
-# plan_constraints should only compute B₁ᵀ and B₂ (and P if needed)
-function construct_saddlesys(plan_constraints::FC,H::FH,
-                           u::TU,f::TF,t::Float64,tol::Float64) where {FC,FH,TU,TF}
+"""
+    construct_saddlesys()
+takes in qJ,vJ to construct the lhs saddle point system, also return operators used
+in ifherk_coupled.
+"""
+function construct_saddlesys(t::Float64, stage::Int64, rkdt_a::Matrix{Float64},
+                             bd::BodyDyn, bgs::Vector{BodyGrid},
+                             qJ::Vector{Float64}, vJ::Vector{Vector{Float64}},
+                             state::Tuple{TW,Vector{Float64},TF,Vector{Float64}},
+                             fluidop::Tuple{FH,FB1,FB2},
+                             bodyop::Tuple{FM,FG1,FG2,FUPP,FF,FGTI},
+                             fsiop::Tuple{FT1,FT2,FX};
+                             tol::Float64=1e-3) where {TW,TF,FH,FB1,FB2,FM,FG1,FG2,FUPP,FF,FGTI,FT1,FT2,FX}
 
-    sys = plan_constraints(u,t) # sys contains B₁ᵀ and B₂ before fixing them up
+    w, v, f, λ = state
+    H, B₁ᵀ, B₂ = fluidop
+    M⁻¹, G₁ᵀ, G₂, UpP, F, gti = bodyop
+    T₁ᵀ, T₂, getX̃ = fsiop
 
-    # B₁ᵀ acts on type TF, B₂ acts on TU
-    optypes = ((TF,),(TU,))
-    opnames = ("B₁ᵀ","B₂")
-    ops = []
+    # Operators at time tᵢ₋₁
+    Mᵢ₋₁ = M⁻¹(bd)      # Body operators
+    Fᵢ₋₁ = F(bd)
+    G₁ᵀᵢ₋₁ = G₁ᵀ(bd)
 
-    # check for methods for B₁ᵀ and B₂
-    for (i,typ) in enumerate(optypes)
-      if TU <: Tuple
-        opsi = ()
-        for I in eachindex(sys[i])
-          typI = (typ[1].parameters[I],)
-          if method_exists(sys[i][I],typI)
-            opsi = (opsi...,sys[i][I])
-          elseif method_exists(*,(typeof(sys[i][I]),typI...))
-            # generate a method that acts on TU
-            opsi = (opsi...,x->sys[i][I]*x)
-          else
-            error("No valid operator for $(opnames[i]) supplied")
-          end
-        end
-        push!(ops,opsi)
-      else
-        if method_exists(sys[i],typ)
-          push!(ops,sys[i])
-        elseif method_exists(*,(typeof(sys[i]),typ...))
-          # generate a method that acts on TU
-          push!(ops,x->sys[i]*x)
-        else
-          error("No valid operator for $(opnames[i]) supplied")
-        end
-      end
+    X̃ = getX̃(bd, bgs)     # get current body points coordinates
+    B₁ᵀᵢ₋₁ = f -> B₁ᵀ(f, X̃)     # Fluid operators
+    T₁ᵀᵢ₋₁ = f -> T₁ᵀ(bd, bgs, f)     # FSI operators
+
+    # Integrate joints qJ and update bs and js in timemarching
+    for k = 1:stage-1
+        qJ += rkdt_a[stage,k]*vJ[k]
     end
-    B₁ᵀ, B₂ = ops
+    bd = UpP(bd, qJ)
+
+    # Operators at time tᵢ with updated body coordinates
+    G₂ᵢ = G₂(bd)        # Body operators
+    gtiᵢ = gti(bd, t)
+
+    X̃ = getX̃(bd, bgs)
+    B₂ᵢ = w -> B₂(w, X̃)        # Fluid operators
+    T₂ᵢ = v -> T₂(bd, bgs, v)     # FSI operators
 
     # Actually call SaddleSystem
-    S = SaddleSystem((u,f),(H,x->B₁ᵀ(x),x->B₂(x)),tol=tol,
-            issymmetric=false,isposdef=true,store=true,precompile=false)
+    S = SaddleSystem((w, v, f, λ),
+                     (H, B₁ᵀᵢ₋₁, B₂ᵢ),
+                     (Mᵢ₋₁, G₁ᵀᵢ₋₁, G₂ᵢ),
+                     (T₁ᵀᵢ₋₁, T₂ᵢ))
 
-
-    return S, ops
+    return (S, B₂ᵢ, G₂ᵢ, T₂ᵢ, Fᵢ₋₁, gtiᵢ), qJ, bd
 
 end
 
 
-#-------------------------------------------------------------------------------
-# Advance the IFHERK solution by one time step
-# This form works when u is NOT a tuple
-function (scheme::IFHERK{FH,FR1,FR2,FC,FS,TU,TF})(t::Float64,u::TU) where
-                      {FH,FR1,FR2,FC,FS,TU,TF}
-  @get scheme (rk,rkdt,H,plan_constraints,r₁,r₂,qᵢ,ubuffer,fbuffer,v̇,tol)
+function (scheme::IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR22,FS,TW,TF})(t::Float64,
+    w::TW,qJ::Vector{Float64},v::Vector{Float64},bd::BodyDyn) where {FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR22,FS,TW,TF}
 
-    # H[i-1] corresponds to H((cᵢ - cᵢ₋₁)Δt)
-    # rkdt coefficients includes the time step size
+    @get scheme (rk,rkdt,H,B₁ᵀ,B₂,M⁻¹,G₁ᵀ,G₂,UpP,UpV,T₁ᵀ,T₂,getX̃,r₁₁,r₁₂,r₂₂,S,bgs,tol)
+    @get scheme (w₀,qJ₀,v₀,wbuffer,vbuffer,fbuffer,λbuffer,ċ,vJ,v̇)
+    @get bd (bs,js,sys)
+
     f = deepcopy(fbuffer)
+    λ = deepcopy(λbuffer)
 
-    # first stage, i = 1
-    # initial value of v̇ is set to 0 when creating ifherk object
+    #---------------------------- first stage, i = 1 ---------------------------
     i = 1
     tᵢ = t
-    qᵢ .= u
+    w₀ .= w
+    qJ₀ .= qJ
+    v₀ .= v
+    # update vJ using v
+    bd, vJ[1] = UpV(bd, v₀)
 
+    #----------------------------- stage 2 to st+1 -----------------------------
     for i = 2:rk.st+1
         # set time
         tᵢ = t + rkdt.c[i]
 
         # construct saddlesys
-        S, (_, B₂) = construct_saddlesys(plan_constraints,H[i-1],u,f,tᵢ,tol)
+        (S, B₂ᵢ, G₂ᵢ, T₂ᵢ, Fᵢ₋₁, gtiᵢ), qJ, bd = construct_saddlesys(tᵢ,i,rkdt.a,
+            bd,bgs,qJ₀,vJ,(w,v,f,λ),(H[i-1],B₁ᵀ,B₂),(M⁻¹,G₁ᵀ,G₂,UpP,r₁₂,r₂₂),(T₁ᵀ,T₂,getX̃))
 
-        # forward qᵢ by recursion
-        qᵢ .= H[i-1]*qᵢ
+        # forward w₀ by recursion
+        w₀ .= H[i-1]*w₀
 
-        # construct lower right hand of saddle system
-        fbuffer .= -r₂(u,tᵢ)
-        ubuffer.data .= qᵢ
+        # temporarily use vbuffer to store accumulated v
+        vbuffer .= v₀
         for j = 1:i-2
-            ubuffer .+= rkdt.a[i,j] .* v̇[j]
+            vbuffer .+= rkdt.a[i,j] .* v̇[j]
         end
-        fbuffer .+= B₂(ubuffer)
+
+        # construct r₂₁
+        fbuffer .= -T₂ᵢ(vbuffer)
+        wbuffer.data .= w₀
+        for j = 1:i-2
+            wbuffer .+= rkdt.a[i,j] .* ċ[j]
+        end
+        fbuffer .+= B₂ᵢ(wbuffer)
         fbuffer .*= -1.0/rkdt.a[i,i-1]
 
-        # construct upper right hand side of saddle system
-        ubuffer .= r₁(u,tᵢ)
+        # construct r₂₂
+        λbuffer .= gtiᵢ
+        λbuffer .+= G₂ᵢ*vbuffer
+        λbuffer .*= -1.0/rkdt.a[i,i-1]
+
+        # construct r₁₁
+        wbuffer .= r₁₁(w,tᵢ)
+
+        # construct r₁₂
+        vbuffer .= Fᵢ₋₁
 
         # solve the linear system
-        v̇[i-1], f = S\(ubuffer,fbuffer)
+        ċ[i-1], v̇[i-1], f, λ = S\(wbuffer,vbuffer,fbuffer,λbuffer)
 
-        # forward v̇[j] by recursion
+        # forward ċ[j] by recursion
         for j = 1:i-2
-            v̇[j] .= H[i-1]*v̇[j]
+            ċ[j] .= H[i-1]*ċ[j]
         end
 
-        # accumulate velocity up to the current stage
-        u .= qᵢ
+        # accumulate fluid vorticity up to the current stage
+        w .= w₀
         for j = 1:i-1
-            u .+=  rkdt.a[i,j] .* v̇[j]
+            w .+=  rkdt.a[i,j] .* ċ[j]
         end
+
+        # accumulate body velocity up to the current stage
+        v .= v₀
+        for j = 1:i-1
+            v .+= rkdt.a[i,j] .* v̇[j]
+        end
+
+        # update vJ using updated v
+        bd, vJ[i] = UpV(bd, v)
+
     end
 
-    return tᵢ, u, f
+    return tᵢ, (w, f), (qJ, v, λ), bd
 end

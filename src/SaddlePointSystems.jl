@@ -9,7 +9,7 @@ export SaddleSystem
 
 
 """
-    SaddleSystem((ċ, u̇, f, λ), (A⁻¹,B₁ᵀ,B₂), (M⁻¹,G₁ᵀ,G₂), (T₁ᵀ, T₂); [tol=1e-3])
+    SaddleSystem((ċ, u̇, f, λ), (A⁻¹,B₁ᵀ,B₂), (M⁻¹,G₁ᵀ,G₂), (T₁ᵀ, T₂); [tol=1e-4])
 
 Construct the computational operators for a saddle-point system of the form
 \$[A 0 B₁ᵀ 0; 0 M T₁ᵀ G₁ᵀ; B₂ -T₂ 0 0; 0 G₂ 0 0][ċ; u̇; f; λ]\$.
@@ -19,7 +19,7 @@ data type in a function-like way, e.g. `A⁻¹(u)`, or in a matrix-like way, e.g
 `A⁻¹*u`.
 
 The optional argument `tol` sets the tolerance for iterative solution (if
-  applicable). Its default is 1e-3.
+  applicable). Its default is 1e-4.
 
 # Arguments
 
@@ -55,7 +55,7 @@ function (::Type{SaddleSystem})(state::Tuple{TC,TU,TF,Tλ},
                                 fluidop::Tuple{FA,FB1,FB2},
                                 bodyop::Tuple{FM,FG1,FG2},
                                 fsiop::Tuple{FT1,FT2};
-                                tol::Float64=1e-3) where {TC,TU,TF,Tλ,FA,FB1,FB2,FM,FG1,FG2,FT1,FT2}
+                                tol::Float64=1e-4) where {TC,TU,TF,Tλ,FA,FB1,FB2,FM,FG1,FG2,FT1,FT2}
     ċ, u̇, f, λ = state
 
     A⁻¹, B₁ᵀ, B₂ = fluidop

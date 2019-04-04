@@ -96,33 +96,18 @@ function TimeMarching.r₁(w::Nodes{Dual,NX,NY},t,sys::FluidStruct{NX,NY},U∞::
 
 end
 
-# RHS of a stationary body with no surface velocity
-function TimeMarching.r₂(w::Nodes{Dual,NX,NY},t,sys::FluidStruct{NX,NY,N}) where {NX,NY,N}
-    ΔV = VectorData(sys.X̃) # create a struct ΔV with same shape of sys.X̃ and initialize it
-    ΔV.u .-= sys.U∞[1]
-    ΔV.v .-= sys.U∞[2]
-    return ΔV
-end
-
-function TimeMarching.r₂(w::Nodes{Dual,NX,NY},t,sys::FluidStruct{NX,NY,N},U∞::RigidBodyMotions.RigidBodyMotion) where {NX,NY,N}
-    ΔV = VectorData(sys.X̃) # create a struct ΔV with same shape of sys.X̃ and initialize it
-    _,ċ,_,_,_,_ = U∞(t)
-    ΔV.u .-= real(ċ)
-    ΔV.v .-= imag(ċ)
-    return ΔV
-end
-
 # Constraint operators, using stored regularization and interpolation operators
 # B₁ᵀ = CᵀEᵀ, B₂ = -ECL⁻¹
-TimeMarching.B₁ᵀ(f,sys::FluidStruct{NX,NY,N}) where {NX,NY,N} = Curl()*(get(sys.Hmat)*f)
-TimeMarching.B₂(w,sys::FluidStruct{NX,NY,N}) where {NX,NY,N} = -(get(sys.Emat)*(Curl()*(sys.L\w)))
+function TimeMarching.B₁ᵀ(f,X̃,sys::FluidStruct{NX,NY,N}) where {NX,NY,N}
+    regop = Regularize(X̃,sys.Δx;issymmetric=true)
+    Hmat, _ = RegularizationMatrix(regop,VectorData{N}(),Edges{Primal,NX,NY}())
+    return Curl()*(Hmat*f)
+end
 
-function TimeMarching.plan_constraints(w::Nodes{Dual,NX,NY},t,sys::FluidStruct{NX,NY,N}) where {NX,NY,N}
-    regop = Regularize(sys.X̃,sys.Δx;issymmetric=true)
-    Hmat, Emat = RegularizationMatrix(regop,VectorData{N}(),Edges{Primal,NX,NY}())
-    sys.Hmat = Hmat
-    sys.Emat = Emat
-    return f->TimeMarching.B₁ᵀ(f,sys), w->TimeMarching.B₂(w,sys)
+function TimeMarching.B₂(w,X̃,sys::FluidStruct{NX,NY,N}) where {NX,NY,N}
+    regop = Regularize(X̃,sys.Δx;issymmetric=true)
+    _, Emat = RegularizationMatrix(regop,VectorData{N}(),Edges{Primal,NX,NY}())
+    return -(Emat*(Curl()*(sys.L\w)))
 end
 
 # wrap functions from Dyn3d
@@ -163,21 +148,22 @@ end
 # and calculate integrated force on each body in 1d Array form(line up dimension of nbody*6_dof)
 function TimeMarching.T₁ᵀ(bd::BodyDyn, bgs::Vector{BodyGrid}, f::VectorData, Δx::Float64)
     # Note that force from fluid solver need to be multiplied by Δx^2 before going into body solver
-    f = f*Δx^2
+    fbuffer = deepcopy(f)
+    fbuffer .*= Δx^2
 
     # Assign f on body grid points to BodyGrid structure of each body
     b_cnt = 1
     ref = 0
     f_exis = zeros(bd.sys.nbody,6)
-    np_total = round(Int,length(f)/2)
+    np_total = length(fbuffer)÷2
     for i = 1:np_total
         # move to the next bgs if i exceed bgs[b_cnt].np
         if i > ref + bgs[b_cnt].np
             ref += bgs[b_cnt].np
             b_cnt += 1
         end
-        bgs[b_cnt].f_ex3d[i-ref][1] = f.u[i]
-        bgs[b_cnt].f_ex3d[i-ref][2] = f.v[i]
+        bgs[b_cnt].f_ex3d[i-ref][1] = fbuffer.u[i]
+        bgs[b_cnt].f_ex3d[i-ref][2] = fbuffer.v[i]
     end
 
     # integrate total forces from all body points on a body
