@@ -38,20 +38,16 @@ function TimeMarching.r₁(w::Nodes{Dual,NX,NY},t,sys::FluidStruct{NX,NY},U∞::
 
 end
 
+# uniform flow velocity
+function TimeMarching.U_inf(w::Nodes{Dual,NX,NY},sys::FluidStruct{NX,NY,N}) where {NX,NY,N}
+    ΔV = VectorData(sys.X̃) # create a struct ΔV with same shape of sys.X̃ and initialize it with 0
+    ΔV.u .= sys.U∞[1]
+    ΔV.v .= sys.U∞[2]
+    return ΔV
+end
+
 # Constraint operators, using stored regularization and interpolation operators
 # B₁ᵀ = CᵀEᵀ, B₂ = -ECL⁻¹
-# function TimeMarching.B₁ᵀ(f,X̃,sys::FluidStruct{NX,NY,N}) where {NX,NY,N}
-#     @time regop = Regularize(X̃,sys.Δx;issymmetric=true); print("B₁ᵀ 1")
-#     @time sys.Hmat, _ = RegularizationMatrix(regop,VectorData{N}(),Edges{Primal,NX,NY}()); print("B₁ᵀ 2")
-#     return Curl()*(get(sys.Hmat)*f)
-# end
-#
-# function TimeMarching.B₂(w,X̃,sys::FluidStruct{NX,NY,N}) where {NX,NY,N}
-#     @time regop = Regularize(X̃,sys.Δx;issymmetric=true); print("B₂ 1")
-#     @time _, sys.Emat = RegularizationMatrix(regop,VectorData{N}(),Edges{Primal,NX,NY}()); print("B₂ 2")
-#     return -(get(sys.Emat)*(Curl()*(sys.L\w)))
-# end
-
 function TimeMarching.B₁ᵀ(f,sys::FluidStruct{NX,NY,N}) where {NX,NY,N}
     return Curl()*(get(sys.Hmat)*f)
 end
@@ -106,7 +102,7 @@ function TimeMarching.T₁ᵀ(bd::BodyDyn, bgs::Vector{BodyGrid}, f::VectorData,
     b_cnt = 1
     ref = 0
     f_exis = zeros(bd.sys.nbody,6)
-    np_total = length(fbuffer)÷2
+    np_total = round(Int,length(fbuffer)/2)
     for i = 1:np_total
         # move to the next bgs if i exceed bgs[b_cnt].np
         if i > ref + bgs[b_cnt].np
@@ -120,7 +116,7 @@ function TimeMarching.T₁ᵀ(bd::BodyDyn, bgs::Vector{BodyGrid}, f::VectorData,
     # integrate total forces from all body points on a body
     bgs = IntegrateBodyGridDynamics(bd,bgs)
     for i = 1:bd.sys.nbody
-        f_exis[i,:] = bgs[i].f_ex6d
+        f_exis[i,:] = -bgs[i].f_ex6d
     end
     return (f_exis')[:]
 end

@@ -23,7 +23,7 @@ if applicable.
 - `r₁` : operator acting on type `u` and `t` and returning `u`
 - `r₂` : operator acting on type `u` and `t` and returning type `f`
 """
-struct IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR22,FS,TW,TF}
+struct IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR21,FR22,FS,TW,TF}
 
     # time step size
     Δt :: Float64
@@ -52,6 +52,7 @@ struct IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR22,
     # right hand side operators
     r₁₁ :: FR11
     r₁₂ :: FR12
+    r₂₁ :: FR21
     r₂₂ :: FR22
 
     # saddle-point system
@@ -82,15 +83,16 @@ function (::Type{IFHERK_coupled})(Δt::Float64, bd::BodyDyn, bgs::Vector{BodyGri
                 fluidop::Tuple{FI,FB1,FB2},
                 bodyop::Tuple{FM,FG1,FG2,FUPP,FUPV},
                 fsiop::Tuple{FT1,FT2,FX},
-                rhs::Tuple{FR11,FR12,FR22},
+                rhs::Tuple{FR11,FR12,FR21,FR22},
                 fsys::FluidStruct{NX,NY,N};
-                tol::Float64=1e-3, rk::RKParams=RK31) where {TW,TF,FI,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR22,NX,NY,N}
+                tol::Float64=1e-3, rk::RKParams=RK31) where {TW,TF,FI,FB1,FB2,FM,
+                        FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR21,FR22,NX,NY,N}
 
     w, qJ, v, f, λ = state
     plan_intfact, B₁ᵀ, B₂ = fluidop
     M⁻¹, G₁ᵀ, G₂, UpP, UpV = bodyop
     T₁ᵀ, T₂, getX̃ = fsiop
-    r₁₁,r₁₂,r₂₂ = rhs
+    r₁₁,r₁₂,r₂₁,r₂₂ = rhs
 
     # scratch space
     w₀ = deepcopy(w)
@@ -126,11 +128,11 @@ function (::Type{IFHERK_coupled})(Δt::Float64, bd::BodyDyn, bgs::Vector{BodyGri
     # actually construct ifherk_coupled object
     ifherksys = IFHERK_coupled{htype,typeof(B₁ᵀ),typeof(B₂),typeof(M⁻¹),typeof(G₁ᵀ),typeof(G₂),
                     typeof(UpP),typeof(UpV),typeof(T₁ᵀ),typeof(T₂),typeof(getX̃),
-                    typeof(r₁₁),typeof(r₁₂),typeof(r₂₂),stype,TW,TF}(Δt,rk,rkdt,
+                    typeof(r₁₁),typeof(r₁₂),typeof(r₂₁),typeof(r₂₂),stype,TW,TF}(Δt,rk,rkdt,
                                 H,B₁ᵀ,B₂,
                                 M⁻¹,G₁ᵀ,G₂,UpP,UpV,
                                 T₁ᵀ,T₂,getX̃,
-                                r₁₁,r₁₂,r₂₂,
+                                r₁₁,r₁₂,r₂₁,r₂₂,
                                 S,bgs,
                                 w₀,qJ₀,v₀,wbuffer,vbuffer,fbuffer,λbuffer,
                                 ċ,vJ,v̇,tol)
@@ -211,11 +213,11 @@ function construct_saddlesys(t::Float64, stage::Int64, rkdt_a::Matrix{Float64},
 end
 
 
-function (scheme::IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR22,FS,TW,TF})(t::Float64,
+function (scheme::IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR21,FR22,FS,TW,TF})(t::Float64,
     w::TW,qJ::Vector{Float64},v::Vector{Float64},bd::BodyDyn,fsys::FluidStruct{NX,NY,N}) where {FH,FB1,
-    FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR22,FS,TW,TF,NX,NY,N}
+    FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR21,FR22,FS,TW,TF,NX,NY,N}
 
-    @get scheme (rk,rkdt,H,B₁ᵀ,B₂,M⁻¹,G₁ᵀ,G₂,UpP,UpV,T₁ᵀ,T₂,getX̃,r₁₁,r₁₂,r₂₂,S,bgs,tol)
+    @get scheme (rk,rkdt,H,B₁ᵀ,B₂,M⁻¹,G₁ᵀ,G₂,UpP,UpV,T₁ᵀ,T₂,getX̃,r₁₁,r₁₂,r₂₁,r₂₂,S,bgs,tol)
     @get scheme (w₀,qJ₀,v₀,wbuffer,vbuffer,fbuffer,λbuffer,ċ,vJ,v̇)
     @get bd (bs,js,sys)
 
@@ -251,6 +253,7 @@ function (scheme::IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11
 
         # construct r₂₁
         fbuffer .= -T₂ᵢ(vbuffer)
+        fbuffer .+= r₂₁(w)
         wbuffer.data .= w₀
         for j = 1:i-2
             wbuffer .+= rkdt.a[i,j] .* ċ[j]

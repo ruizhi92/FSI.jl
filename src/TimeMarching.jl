@@ -9,11 +9,12 @@ import Dyn3d:RKParams, TimeMarching.RK31, TimeMarching.Euler
 @reexport using Dyn3d:ConstructSystem, RigidBodyDynamics, FluidInteraction, SpatialAlgebra, UpdateSystem
 
 export RKParams, RK31, Euler
-export IFHERK_coupled, r₁, B₂, B₁ᵀ, plan_constraints
+export IFHERK_coupled, r₁, U_inf, B₂, B₁ᵀ, plan_constraints
 export F, G₁ᵀ, G₂, M⁻¹, gti, UpP, UpV, T₁ᵀ, T₂, getX̃
 
 # Functions that get extended by fluid systems
 function r₁ end
+function U_inf end
 function B₂ end
 function B₁ᵀ end
 function plan_constraints end
