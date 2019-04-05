@@ -14,12 +14,12 @@ include("SaddlePointSystems.jl")
 # import SaddlePointSystems
 @reexport using .SaddlePointSystems
 
-include("TimeMarching.jl")
-# import TimeMarching
-@reexport using .TimeMarching
-
 include("Systems.jl")
 # import Systems
 @reexport using .Systems
+
+include("TimeMarching.jl")
+# import TimeMarching
+@reexport using .TimeMarching
 
 end

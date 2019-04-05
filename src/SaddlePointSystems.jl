@@ -2,7 +2,6 @@ module SaddlePointSystems
 import Base: \, A_ldiv_B!
 
 using LinearMaps
-using IterativeSolvers
 
 import Whirl:Fields.VectorData
 export SaddleSystem
@@ -46,6 +45,7 @@ struct SaddleSystem{TC,TU,TF,Tλ,FA,FB2,FT2,FM,FG2,FAB,FMT,FMG,Nf,Nλ}
     M⁻¹T₁ᵀ :: FMT
     M⁻¹G₁ᵀ :: FMG
     S  :: LinearMap
+    S⁻¹ :: Factorization{Float64}
 
     tol :: Float64
 end
@@ -90,33 +90,33 @@ function (::Type{SaddleSystem})(state::Tuple{TC,TU,TF,Tλ},
     end
     M⁻¹, G₁ᵀ, G₂ = bops
 
-    ċbuffer = deepcopy(ċ)
-    u̇buffer = deepcopy(u̇)
     fbuffer = deepcopy(f)
     λbuffer = deepcopy(λ)
     Nf = length(f)
     Nλ = length(λ)
-    tmpvec = zeros(Nf+Nλ)
+    N = Nf + Nλ
+    tmpvec = zeros(N)
+    fλbuffer = zeros(N)
 
     # functions in SaddleSystem attributes
     A⁻¹B₁ᵀ(f::TF) = (A⁻¹∘B₁ᵀ)(f)
     M⁻¹T₁ᵀ(f::TF) = (M⁻¹∘T₁ᵀ)(f)
     M⁻¹G₁ᵀ(λ::Tλ) = (M⁻¹∘G₁ᵀ)(λ)
 
+    # functions used to create LinearMap lhsmat
+    B₂A⁻¹B₁ᵀ(f::TF) = (B₂∘A⁻¹∘B₁ᵀ)(f)
+    T₂M⁻¹T₁ᵀ(f::TF) = (T₂∘M⁻¹∘T₁ᵀ)(f)
+    B₂A⁻¹B₁ᵀT₂M⁻¹T₁ᵀ(f::TF) = B₂A⁻¹B₁ᵀ(f) - T₂M⁻¹T₁ᵀ(f)
+    T₂M⁻¹G₁ᵀ(λ::Tλ) = (T₂∘M⁻¹∘G₁ᵀ)(λ)
+    G₂M⁻¹T₁ᵀ(f::TF) = (G₂∘M⁻¹∘T₁ᵀ)(f)
+    G₂M⁻¹G₁ᵀ(λ::Tλ) = (G₂∘M⁻¹∘G₁ᵀ)(λ)
+
+    # create the left hand side matrix
+    out = zeros(N)
     function lhsmat(x::AbstractVector{Float64})
         fbuffer .= x[1:Nf]
         λbuffer .= x[Nf+1:end]
 
-        # functions used to create LinearMap here
-        B₂A⁻¹B₁ᵀ(f::TF) = (B₂∘A⁻¹∘B₁ᵀ)(f)
-        T₂M⁻¹T₁ᵀ(f::TF) = (T₂∘M⁻¹∘T₁ᵀ)(f)
-        B₂A⁻¹B₁ᵀT₂M⁻¹T₁ᵀ(f::TF) = B₂A⁻¹B₁ᵀ(f) - T₂M⁻¹T₁ᵀ(f)
-        T₂M⁻¹G₁ᵀ(λ::Tλ) = (T₂∘M⁻¹∘G₁ᵀ)(λ)
-        G₂M⁻¹T₁ᵀ(f::TF) = (G₂∘M⁻¹∘T₁ᵀ)(f)
-        G₂M⁻¹G₁ᵀ(λ::Tλ) = (G₂∘M⁻¹∘G₁ᵀ)(λ)
-
-        # create the left hand side matrix
-        out = zeros(Nf+Nλ)
         out[1:Nf] .= B₂A⁻¹B₁ᵀT₂M⁻¹T₁ᵀ(fbuffer)
         out[1:Nf] .-= T₂M⁻¹G₁ᵀ(λbuffer)
         out[Nf+1:end] .= G₂M⁻¹T₁ᵀ(fbuffer)
@@ -124,12 +124,23 @@ function (::Type{SaddleSystem})(state::Tuple{TC,TU,TF,Tλ},
         return out
     end
 
-    S = LinearMap(lhsmat,Nf+Nλ;ismutating=false,issymmetric=false,isposdef=false)
+    S = LinearMap(lhsmat,N;ismutating=false,issymmetric=false,isposdef=false)
+
+    # construct S into real matrix
+    Smat = zeros(N,N)
+    for i = 1:N
+      tmpvec[i] = 1.0
+      fλbuffer .= S*tmpvec
+      Smat[1:N,i] .= fλbuffer
+      tmpvec[i] = 0.0
+    end
+    S⁻¹ = factorize(Smat)
+    tmpvec .= 0.0
 
     saddlesys = SaddleSystem{TC,TU,TF,Tλ,typeof(A⁻¹),typeof(B₂),typeof(T₂),typeof(M⁻¹),typeof(G₂),
                             typeof(A⁻¹B₁ᵀ),typeof(M⁻¹T₁ᵀ),typeof(M⁻¹G₁ᵀ),Nf,Nλ}(
-                                ċbuffer,u̇buffer,tmpvec,
-                                A⁻¹,B₂,T₂,M⁻¹,G₂,A⁻¹B₁ᵀ,M⁻¹T₁ᵀ,M⁻¹G₁ᵀ,S,tol)
+                                ċ,u̇,tmpvec,
+                                A⁻¹,B₂,T₂,M⁻¹,G₂,A⁻¹B₁ᵀ,M⁻¹T₁ᵀ,M⁻¹G₁ᵀ,S,S⁻¹,tol)
 
     return saddlesys
 end
@@ -142,11 +153,6 @@ function Base.show(io::IO, S::SaddleSystem{TC,TU,TF,Tλ,FA,FB2,FT2,FM,FG2,FAB,FM
     println(io, "   Body state of type $TU")
     println(io, "   Joint force of type $Tλ")
 end
-
-# This form has error message said type mismatch
-# function A_ldiv_B!(state::Tuple{TU,TU,TF,TF},
-#                     sys::SaddleSystem{TU,TF,FA,FB2,FT2,FM,FG2,FAB,FMT,FMG,Nf,Nλ},
-#                     rhs::Tuple{TU,TU,TF,TF}) where {TU,TF,FA,FB2,FT2,FM,FG2,FAB,FMT,FMG,Nf,Nλ}
 
 function A_ldiv_B!(state::Tuple{TC,TU,TF,Tλ},
                     sys::T,
@@ -165,7 +171,8 @@ function A_ldiv_B!(state::Tuple{TC,TU,TF,Tλ},
     rλ .+= sys.G₂(sys.M⁻¹ru̇)
 
     # solve for forcing terms
-    tmpvec = gmres(sys.S, [rf;rλ], tol=1e-4)
+    # tmpvec = gmres(sys.S, [rf;rλ], tol=1e-4)
+    tmpvec = A_ldiv_B!(sys.S⁻¹, [rf;rλ])
     f .= VectorData(tmpvec[1:Nf])
     λ .= tmpvec[Nf+1:end]
 
@@ -181,8 +188,6 @@ function A_ldiv_B!(state::Tuple{TC,TU,TF,Tλ},
 end
 
 
-# \(sys::SaddleSystem{TU,TF,FA,FB2,FT2,FM,FG2,FAB,FMT,FMG,Nf,Nλ},rhs::Tuple{TU,TU,TF,TF}) where {TU,TF,FA,FB2,FT2,FM,FG2,FAB,FMT,FMG,Nf,Nλ} =
-#     A_ldiv_B!(similar.(rhs),sys,rhs)
 \(sys::T,rhs::Tuple{TC,TU,TF,Tλ}) where {TC,TU,TF,Tλ,T<:SaddleSystem} =
     A_ldiv_B!(similar.(rhs),sys,rhs)
 

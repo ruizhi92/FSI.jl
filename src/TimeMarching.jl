@@ -2,9 +2,11 @@ module TimeMarching
 
 using Reexport
 
-import Whirl:@get, Nodes
+import Whirl:@get
 import Dyn3d:RKParams, TimeMarching.RK31, TimeMarching.Euler
-import Dyn3d:BodyDyn, BodyGrid
+
+@reexport using Whirl:Fields, RigidBodyMotions
+@reexport using Dyn3d:ConstructSystem, RigidBodyDynamics, FluidInteraction, SpatialAlgebra, UpdateSystem
 
 export RKParams, RK31, Euler
 export IFHERK_coupled, r₁, B₂, B₁ᵀ, plan_constraints
@@ -31,7 +33,9 @@ function T₂ end
 function getX̃ end
 
 using ..SaddlePointSystems
+using ..Systems
 
+include("timemarching/timemarching_ops.jl")
 include("timemarching/ifherk_coupled.jl")
 
 end
