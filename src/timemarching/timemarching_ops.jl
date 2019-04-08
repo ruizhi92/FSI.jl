@@ -113,11 +113,15 @@ function TimeMarching.T₁ᵀ(bd::BodyDyn, bgs::Vector{BodyGrid}, f::VectorData,
         bgs[b_cnt].f_ex3d[i-ref][2] = fbuffer.v[i]
     end
 
-    # integrate total forces from all body points on a body
+    # Integrate total forces from all body points on a body
+    # then transform the external forces from inertial frame to body frame
+    # Mind Newton's 3rd law(the negative sign)
     bgs = IntegrateBodyGridDynamics(bd,bgs)
     for i = 1:bd.sys.nbody
         f_exis[i,:] = -bgs[i].f_ex6d
+        f_exis[i,:] = bd.bs[i].Xb_to_i'*f_exis[i,:]
     end
+    
     return (f_exis')[:]
 end
 

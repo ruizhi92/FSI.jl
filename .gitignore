@@ -1,5 +1,5 @@
 */.ipynb_checkpoints
 docs/build
 *.gif
-notebook/local_run
-
+examples/local_run
+*.jld
