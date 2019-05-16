@@ -3,12 +3,12 @@ module TimeMarching
 using Reexport
 
 import Whirl:@get
-import Dyn3d:RKParams, TimeMarching.RK31, TimeMarching.Euler
+import Dyn3d:RKParams, TimeMarching.RK31, TimeMarching.Euler, TimeMarching.RK32, TimeMarching.RK4
 
 @reexport using Whirl:Fields, RigidBodyMotions
 @reexport using Dyn3d:ConstructSystem, RigidBodyDynamics, FluidInteraction, SpatialAlgebra, UpdateSystem
 
-export RKParams, RK31, Euler
+export RKParams, RK31, Euler, RK32, RK4
 export IFHERK_coupled, r₁, U_inf, B₂, B₁ᵀ, plan_constraints
 export F, G₁ᵀ, G₂, M⁻¹, gti, UpP, UpV, T₁ᵀ, T₂, getX̃
 

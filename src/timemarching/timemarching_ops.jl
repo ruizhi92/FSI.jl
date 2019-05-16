@@ -95,22 +95,27 @@ end
 # and calculate integrated force on each body in 1d Array form(line up dimension of nbody*6_dof)
 function TimeMarching.T₁ᵀ(bd::BodyDyn, bgs::Vector{BodyGrid}, f::VectorData, Δx::Float64)
     # Note that force from fluid solver need to be multiplied by Δx^2 before going into body solver
+    # Also note that here we assume the last point of parent body coincide with the
+    # beginning point of the child body!
     fbuffer = deepcopy(f)
     fbuffer .*= Δx^2
 
     # Assign f on body grid points to BodyGrid structure of each body
     b_cnt = 1
     ref = 0
+    comp = 0
     f_exis = zeros(bd.sys.nbody,6)
     np_total = round(Int,length(fbuffer)/2)
-    for i = 1:np_total
+    for i = 1:np_total+bd.sys.nbody-1
         # move to the next bgs if i exceed bgs[b_cnt].np
+        # also compensate for the overlapping point of parent and child body
         if i > ref + bgs[b_cnt].np
             ref += bgs[b_cnt].np
             b_cnt += 1
+            comp += 1
         end
-        bgs[b_cnt].f_ex3d[i-ref][1] = fbuffer.u[i]
-        bgs[b_cnt].f_ex3d[i-ref][2] = fbuffer.v[i]
+        bgs[b_cnt].f_ex3d[i-ref][1] = fbuffer.u[i-comp]
+        bgs[b_cnt].f_ex3d[i-ref][2] = fbuffer.v[i-comp]
     end
 
     # Integrate total forces from all body points on a body
@@ -121,7 +126,7 @@ function TimeMarching.T₁ᵀ(bd::BodyDyn, bgs::Vector{BodyGrid}, f::VectorData,
         f_exis[i,:] = -bgs[i].f_ex6d
         f_exis[i,:] = bd.bs[i].Xb_to_i'*f_exis[i,:]
     end
-    
+
     return (f_exis')[:]
 end
 
