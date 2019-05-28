@@ -134,6 +134,11 @@ end
 # and acquire body grid points's x-y plane 2d velocity to return VectorData
 function TimeMarching.T₂(bd::BodyDyn, bgs::Vector{BodyGrid}, u::Array{Float64,1})
     @get bd (bs, sys)
+    @get sys.pre_array (la_tmp1,la_tmp2)
+
+    v_temp = zeros(Float64,6)
+    la_tmp1 .= 0.0
+    la_tmp2 .= 0.0
 
     count = 0
     for i = 1:sys.nbody
@@ -147,7 +152,7 @@ function TimeMarching.T₂(bd::BodyDyn, bgs::Vector{BodyGrid}, u::Array{Float64,
     for i = 1:length(bgs)
         b = bs[bgs[i].bid]
         if b.bid == 1
-            X_ref = TransMatrix([zeros(Float64,3);b.x_i])
+            X_ref = TransMatrix([zeros(Float64,3);b.x_i],la_tmp1,la_tmp2)
         end
     end
 
@@ -156,6 +161,11 @@ function TimeMarching.T₂(bd::BodyDyn, bgs::Vector{BodyGrid}, u::Array{Float64,
         for j = 1:bgs[i].np
             v_temp = bs[i].v + [zeros(Float64, 3); cross(bs[i].v[1:3],bgs[i].points[j])]
             bgs[i].v_i[j] = (X_ref*b.Xb_to_i*v_temp)[4:6]
+            # v_temp .= bs[i].v
+            # v_temp[4:6] .+= cross(view(bs[i].v,1:3),bgs[i].points[j])
+            # v_temp .= b.Xb_to_i*v_temp
+            # v_temp .= X_ref*v_temp
+            # bgs[i].v_i[j] = v_temp[4:6]
         end
     end
 
