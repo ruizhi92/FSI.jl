@@ -106,18 +106,31 @@ function TimeMarching.T₁ᵀ(bd::BodyDyn, bgs::Vector{BodyGrid}, f::VectorData,
     comp = 0
     f_exis = zeros(bd.sys.nbody,6)
     np_total = round(Int,length(fbuffer)/2)
-    for i = 1:np_total+bd.sys.nbody-1
-        # move to the next bgs if i exceed bgs[b_cnt].np
-        # also compensate for the overlapping point of parent and child body
-        if i > ref + bgs[b_cnt].np
-            ref += bgs[b_cnt].np
-            b_cnt += 1
-            comp += 1
-        end
-        bgs[b_cnt].f_ex3d[i-ref][1] = fbuffer.u[i-comp]
-        bgs[b_cnt].f_ex3d[i-ref][2] = fbuffer.v[i-comp]
-    end
 
+    if (bd.sys.nbody != 1) && (bd.js[2].shape2[4:6] != zeros(3))
+        # gap between bodies
+        for i = 1:np_total
+            # move to the next bgs if i exceed bgs[b_cnt].np
+            if i > ref + bgs[b_cnt].np
+                ref += bgs[b_cnt].np
+                b_cnt += 1
+            end
+            bgs[b_cnt].f_ex3d[i-ref][1] = fbuffer.u[i]
+            bgs[b_cnt].f_ex3d[i-ref][3] = fbuffer.v[i]
+        end
+    else
+        # no gap between bodies, compensate for the overlapping point of parent and child body
+        for i = 1:np_total+bd.sys.nbody-1
+            # move to the next bgs if i exceed bgs[b_cnt].np
+            if i > ref + bgs[b_cnt].np
+                ref += bgs[b_cnt].np
+                b_cnt += 1
+                comp += 1
+            end
+            bgs[b_cnt].f_ex3d[i-ref][1] = fbuffer.u[i-comp]
+            bgs[b_cnt].f_ex3d[i-ref][2] = fbuffer.v[i-comp]
+        end
+    end
     # Integrate total forces from all body points on a body
     # then transform the external forces from inertial frame to body frame
     # Mind Newton's 3rd law(the negative sign)
@@ -161,11 +174,6 @@ function TimeMarching.T₂(bd::BodyDyn, bgs::Vector{BodyGrid}, u::Array{Float64,
         for j = 1:bgs[i].np
             v_temp = bs[i].v + [zeros(Float64, 3); cross(bs[i].v[1:3],bgs[i].points[j])]
             bgs[i].v_i[j] = (X_ref*b.Xb_to_i*v_temp)[4:6]
-            # v_temp .= bs[i].v
-            # v_temp[4:6] .+= cross(view(bs[i].v,1:3),bgs[i].points[j])
-            # v_temp .= b.Xb_to_i*v_temp
-            # v_temp .= X_ref*v_temp
-            # bgs[i].v_i[j] = v_temp[4:6]
         end
     end
 
@@ -193,6 +201,101 @@ function TimeMarching.getX̃(bd::BodyDyn, bgs::Vector{BodyGrid})
     coord = hcat(bgs[1].q_i...)'[:,[1,2]]
     for i = 2:length(bgs)
         coord = [coord[1:end-1,:]; hcat(bgs[i].q_i...)'[:,[1,2]]]
+    end
+    return VectorData(coord)
+end
+
+# create function overloading of T₁ᵀ, T₂ and getX̃ for cases where 2d body shows
+# in x-z plane (like a cylinder)
+# ------------------------------------------------------------------------------
+
+# T₁ᵀ takes in 2d x-y plane fluid force f of all body grid points in VectorData form
+# and calculate integrated force on each body in 1d Array form(line up dimension of nbody*6_dof)
+function TimeMarching.T₁ᵀ(bd::BodyDyn, bgs::Vector{BodyGrid}, f::VectorData, Δx::Float64, flag::String)
+    # Note that force from fluid solver need to be multiplied by Δx^2 before going into body solver
+    fbuffer = deepcopy(f)
+    fbuffer .*= Δx^2
+
+    # Assign f on body grid points to BodyGrid structure of each body
+    b_cnt = 1
+    ref = 0
+    f_exis = zeros(bd.sys.nbody,6)
+    np_total = round(Int,length(fbuffer)/2)
+    for i = 1:np_total
+        # move to the next bgs if i exceed bgs[b_cnt].np
+        if i > ref + bgs[b_cnt].np
+            ref += bgs[b_cnt].np
+            b_cnt += 1
+        end
+        bgs[b_cnt].f_ex3d[i-ref][1] = fbuffer.u[i]
+        bgs[b_cnt].f_ex3d[i-ref][3] = fbuffer.v[i]
+    end
+
+    # Integrate total forces from all body points on a body
+    # then transform the external forces from inertial frame to body frame
+    # Mind Newton's 3rd law(the negative sign)
+    bgs = IntegrateBodyGridDynamics(bd,bgs)
+    for i = 1:bd.sys.nbody
+        f_exis[i,:] = -bgs[i].f_ex6d
+        f_exis[i,:] = bd.bs[i].Xb_to_i'*f_exis[i,:]
+    end
+
+    return (f_exis')[:]
+end
+
+# T₂ takes in the lined-up 6d spatial velocity of all body in 1d Array form
+# and acquire body grid points's x-y plane 2d velocity to return VectorData
+function TimeMarching.T₂(bd::BodyDyn, bgs::Vector{BodyGrid}, u::Array{Float64,1}, flag::String)
+    @get bd (bs, sys)
+    @get sys.pre_array (la_tmp1, la_tmp2)
+    count = 0
+    for i = 1:sys.nbody
+        bs[i].v = u[count+1:count+6]
+        count += 6
+    end
+
+    # the j-th v_i in body points of a body is calculated by transferring to
+    # a coordinate that sits at the beginning point of the first body but with zero angle.
+    X_ref = zeros(Float64,6)
+    for i = 1:length(bgs)
+        b = bs[bgs[i].bid]
+        if b.bid == 1
+            X_ref = TransMatrix([zeros(Float64,3);b.x_i], la_tmp1, la_tmp2)
+        end
+    end
+
+    for i = 1:length(bgs)
+        b = bs[bgs[i].bid]
+        for j = 1:bgs[i].np
+            v_temp = bs[i].v + [zeros(Float64, 3); cross(bs[i].v[1:3],bgs[i].points[j])]
+            bgs[i].v_i[j] = (X_ref*b.Xb_to_i*v_temp)[4:6]
+        end
+    end
+
+    motion = hcat(bgs[1].v_i...)'[:,[1,3]]
+    for i = 2:length(bgs)
+        motion = [motion[1:end-1,:]; hcat(bgs[i].v_i...)'[:,[1,3]]]
+    end
+    return VectorData(motion)
+end
+
+# getX̃ use body bs[i].x_i and acquire body grid points's coordinates by
+# the j-th q_i in body points of a body = bs[i].x_i + Xb_to_i*points[j], return VectorData
+function TimeMarching.getX̃(bd::BodyDyn, bgs::Vector{BodyGrid}, flag::String)
+    @get bd (bs, )
+
+    for i = 1:length(bgs)
+        b = bs[bgs[i].bid]
+        for j = 1:bgs[i].np
+            q_temp = [zeros(Float64, 3); bgs[i].points[j]]
+            q_temp = [zeros(Float64, 3); b.x_i] + b.Xb_to_i*q_temp
+            bgs[i].q_i[j] = q_temp[4:6]
+        end
+    end
+
+    coord = hcat(bgs[1].q_i...)'[:,[1,3]]
+    for i = 2:length(bgs)
+        coord = [coord[1:end-1,:]; hcat(bgs[i].q_i...)'[:,[1,3]]]
     end
     return VectorData(coord)
 end
