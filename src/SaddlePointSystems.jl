@@ -1,12 +1,48 @@
 module SaddlePointSystems
-import Base: \, A_ldiv_B!
 
 using LinearMaps
+using LinearAlgebra
 
-import Whirl:Fields.VectorData
+import Base: \,+,*
+import LinearAlgebra: ldiv!
+
+using ..Fields:VectorData, ScalarData
 export SaddleSystem
 
-
+# extend method from FSI
+function VectorData(a::Array{Float64,2})
+    return VectorData(a[:,1],a[:,2])
+end
+function VectorData(a::Vector{Float64})
+    N = length(a)÷2
+    return VectorData(a[1:N],a[N+1:end])
+end
+function (+)(a::VectorData, b::VectorData)
+    c = VectorData(a)
+    c.u .= a.u .+ b.u
+    c.v .= a.v .+ b.v
+    return c
+end
+function (+)(a::ScalarData, b::ScalarData)
+    c = ScalarData(a)
+    c.data .= a.data .+ b.data
+    return c
+end
+function (*)(ω::T, a::VectorData) where T<: Real
+    c = VectorData(a)
+    c.u .= ω.*a.u
+    c.v .= ω.*a.v
+    return c
+end
+function (*)(a::VectorData,ω::T) where T<: Real
+    c = VectorData(a)
+    c.u .= ω.*a.u
+    c.v .= ω.*a.v
+    return c
+end
+function (*)(no::Nothing,a::VectorData)
+    return VectorData(a)
+end
 """
     SaddleSystem((ċ, u̇, f, λ), (A⁻¹,B₁ᵀ,B₂), (M⁻¹,G₁ᵀ,G₂), (T₁ᵀ, T₂); [tol=1e-4])
 
@@ -69,9 +105,9 @@ function (::Type{SaddleSystem})(state::Tuple{TC,TU,TF,Tλ},
     fops = []
 
     for (i,typ) in enumerate(foptypes)
-      if method_exists(fsys[i],Tuple{typ})
+      if hasmethod(fsys[i],Tuple{typ})
         push!(fops,fsys[i])
-    elseif method_exists(*,Tuple{typeof(fsys[i]),typ})
+    elseif hasmethod(*,Tuple{typeof(fsys[i]),typ})
         push!(fops,x->fsys[i]*x)
       else
         error("No valid operator for $(fopnames[i]) supplied")
@@ -154,7 +190,7 @@ function Base.show(io::IO, S::SaddleSystem{TC,TU,TF,Tλ,FA,FB2,FT2,FM,FG2,FAB,FM
     println(io, "   Joint force of type $Tλ")
 end
 
-function A_ldiv_B!(state::Tuple{TC,TU,TF,Tλ},
+function ldiv!(state::Tuple{TC,TU,TF,Tλ},
                     sys::T,
                     rhs::Tuple{TC,TU,TF,Tλ}) where {TC,TU,TF,Tλ,T<:SaddleSystem}
     rċ, ru̇, rf, rλ = rhs
@@ -172,7 +208,7 @@ function A_ldiv_B!(state::Tuple{TC,TU,TF,Tλ},
 
     # solve for forcing terms
     # tmpvec = gmres(sys.S, [rf;rλ], tol=1e-4)
-    tmpvec = A_ldiv_B!(sys.S⁻¹, [rf;rλ])
+    tmpvec = ldiv!(sys.S⁻¹, [rf;rλ])
     f .= VectorData(tmpvec[1:Nf])
     λ .= tmpvec[Nf+1:end]
 
@@ -189,6 +225,6 @@ end
 
 
 \(sys::T,rhs::Tuple{TC,TU,TF,Tλ}) where {TC,TU,TF,Tλ,T<:SaddleSystem} =
-    A_ldiv_B!(similar.(rhs),sys,rhs)
+    ldiv!(deepcopy.(rhs),sys,rhs)
 
 end

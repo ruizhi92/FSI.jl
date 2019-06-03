@@ -21,8 +21,8 @@ mutable struct FluidStruct{NX, NY, N}
     X̃::VectorData{N}
 
     # Pre-stored regularization and interpolation matrices (if present)
-    Hmat::Nullable{RegularizationMatrix}
-    Emat::Nullable{InterpolationMatrix}
+    Hmat::RegularizationMatrix
+    Emat::InterpolationMatrix
 
     # Pre-allocated space for intermediate values
     Vb::VectorData{N}
@@ -46,8 +46,8 @@ function FluidStruct(dims::Tuple{Int, Int}, Re, Δx, Δt;
     N = length(X̃)÷2
 
     # set interpolation and regularization matrices
-    Hmat = Nullable{RegularizationMatrix}()
-    Emat = Nullable{InterpolationMatrix}()
+    regop = Regularize(X̃,Δx,issymmetric=true)
+    Hmat, Emat = RegularizationMatrix(regop,Vb,Fq)
 
     FluidStruct{NX, NY, N}(Re, U∞, Δx, Δt, rk, L, X̃, Hmat, Emat, Vb, Fq, Ww, Qq)
 end

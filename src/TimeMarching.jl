@@ -1,12 +1,20 @@
 module TimeMarching
 
 using Reexport
+using LinearAlgebra
 
-import Whirl:@get
-import Dyn3d:RKParams, TimeMarching.RK31, TimeMarching.Euler, TimeMarching.RK32, TimeMarching.RK4
+import ViscousFlow:@get
+import Dyn3d.RKParams
+import Dyn3d.TimeMarching.RK31, Dyn3d.TimeMarching.Euler, Dyn3d.TimeMarching.RK4
 
-@reexport using Whirl:Fields, RigidBodyMotions
-@reexport using Dyn3d:ConstructSystem, RigidBodyDynamics, FluidInteraction, SpatialAlgebra, UpdateSystem
+@reexport using ViscousFlow.Fields
+@reexport using ViscousFlow.RigidBodyMotions
+@reexport using Dyn3d.ConstructSystem
+@reexport using Dyn3d.RigidBodyDynamics
+@reexport using Dyn3d.FluidInteraction
+@reexport using Dyn3d.SpatialAlgebra
+@reexport using Dyn3d.UpdateSystem
+
 
 export RKParams, RK31, Euler, RK32, RK4
 export IFHERK_coupled, r₁, U_inf, B₂, B₁ᵀ, plan_constraints

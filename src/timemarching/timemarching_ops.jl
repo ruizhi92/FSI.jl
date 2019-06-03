@@ -12,11 +12,11 @@ function TimeMarching.r₁(w::Nodes{Dual,NX,NY},t,sys::FluidStruct{NX,NY}) where
   L = sys.L
   Δx⁻¹ = 1/sys.Δx
 
-  shift!(Qq,curl(L\w)) # -velocity, on dual edges
+  cellshift!(Qq,curl(L\w)) # -velocity, on dual edges
   Qq.u .-= sys.U∞[1]
   Qq.v .-= sys.U∞[2]
 
-  return scale!(divergence(Qq∘shift!(Ww,w)),Δx⁻¹) # -∇⋅(wu)
+  return rmul!(divergence(Qq∘cellshift!(Ww,w)),Δx⁻¹) # -∇⋅(wu)
 
 end
 
@@ -29,12 +29,12 @@ function TimeMarching.r₁(w::Nodes{Dual,NX,NY},t,sys::FluidStruct{NX,NY},U∞::
   L = sys.L
   Δx⁻¹ = 1/sys.Δx
 
-  shift!(Qq,curl(L\w)) # -velocity, on dual edges
+  cellshift!(Qq,curl(L\w)) # -velocity, on dual edges
   _,ċ,_,_,_,_ = U∞(t)
   Qq.u .-= real(ċ)
   Qq.v .-= imag(ċ)
 
-  return scale!(divergence(Qq∘shift!(Ww,w)),Δx⁻¹) # -∇⋅(wu)
+  return rmul!(divergence(Qq∘cellshift!(Ww,w)),Δx⁻¹) # -∇⋅(wu)
 
 end
 
@@ -49,11 +49,11 @@ end
 # Constraint operators, using stored regularization and interpolation operators
 # B₁ᵀ = CᵀEᵀ, B₂ = -ECL⁻¹
 function TimeMarching.B₁ᵀ(f,sys::FluidStruct{NX,NY,N}) where {NX,NY,N}
-    return Curl()*(get(sys.Hmat)*f)
+    return Curl()*(sys.Hmat*f)
 end
 
 function TimeMarching.B₂(w,sys::FluidStruct{NX,NY,N}) where {NX,NY,N}
-    return -(get(sys.Emat)*(Curl()*(sys.L\w)))
+    return -(sys.Emat*(Curl()*(sys.L\w)))
 end
 
 
@@ -62,10 +62,11 @@ function TimeMarching.M⁻¹(bd::BodyDyn)
     return HERKFuncM⁻¹(bd.sys)
 end
 
-function TimeMarching.F(bd::BodyDyn)
-    f_exi = zeros(Float64,bd.sys.nbody,6)
-    return HERKFuncf(bd.bs, bd.js, bd.sys, f_exi)
-end
+# define TimeMarching.F in notebook file depending on considering buoyancy or not
+# function TimeMarching.F(bd::BodyDyn)
+#     f_exi = zeros(Float64,bd.sys.nbody,6)
+#     return HERKFuncf(bd.bs, bd.js, bd.sys, f_exi)
+# end
 
 function TimeMarching.G₁ᵀ(bd::BodyDyn)
     return HERKFuncGT(bd.bs, bd.sys)
