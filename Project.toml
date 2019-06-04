@@ -4,6 +4,7 @@ authors = ["fs <rzyang92@gmail.com>"]
 version = "0.1.0"
 
 [deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Dyn3d = "d8047ffa-7f43-11e9-2204-adfbb6974ec5"
 JLD = "4138dd39-2aa7-5051-a626-17a0bb65d9c8"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"

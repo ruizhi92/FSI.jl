@@ -1,4 +1,4 @@
-*/.ipynb_checkpoints
+examples/.ipynb_checkpoints
 docs/build
 *.gif
 examples/local_run
