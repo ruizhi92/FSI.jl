@@ -2,13 +2,14 @@ module Systems
 
 using Reexport
 
-export FluidStruct
+export NavierStokes
 
 import ViscousFlow:@get
-import Dyn3d:RKParams, TimeMarching.RK31
-@reexport using ViscousFlow.Fields
-@reexport using ViscousFlow.RigidBodyMotions
 
-include("systems/fluidstruct.jl")
+using ..Fields
+using ..TimeMarching
+using ..RigidBodyMotions
+
+include("systems/navier_stokes.jl")
 
 end
