@@ -3,3 +3,4 @@ docs/build
 *.gif
 examples/local_run
 *.jld
+*.bson
