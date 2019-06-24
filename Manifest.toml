@@ -183,11 +183,11 @@ version = "0.22.4"
 
 [[Dyn3d]]
 deps = ["Compat", "DocStringExtensions", "Interact", "Interpolations", "LaTeXStrings", "LinearAlgebra", "Plots", "PyPlot", "Reactive", "Reexport"]
-git-tree-sha1 = "f04438fd5c8a802d7b2f6b6f89db870d37c3e2f5"
+git-tree-sha1 = "e4843d9579f6a653f8bda41c245f226d92cd1c6c"
 repo-rev = "master"
 repo-url = "https://github.com/ruizhi92/Dyn3d.jl"
 uuid = "d8047ffa-7f43-11e9-2204-adfbb6974ec5"
-version = "0.1.0"
+version = "0.1.1"
 
 [[FFTW]]
 deps = ["AbstractFFTs", "BinaryProvider", "Compat", "Conda", "Libdl", "LinearAlgebra", "Reexport", "Test"]
@@ -649,12 +649,12 @@ uuid = "81def892-9a0e-5fdd-b105-ffc91e053289"
 version = "1.1.3"
 
 [[ViscousFlow]]
-deps = ["ColorTypes", "Compat", "DiffRules", "Distributed", "DocStringExtensions", "Documenter", "FFTW", "FastGaussQuadrature", "FileIO", "ForwardDiff", "IterativeSolvers", "LaTeXStrings", "LinearAlgebra", "LinearMaps", "PlotUtils", "Plots", "PyCall", "PyPlot", "RecipesBase", "Reexport", "Serialization", "SparseArrays", "SpecialFunctions", "StaticArrays", "Test"]
-git-tree-sha1 = "53c433c5b080a976bdcbf715d743aec6463ec426"
+deps = ["ColorTypes", "Compat", "DiffRules", "Distributed", "DocStringExtensions", "Documenter", "FFTW", "FastGaussQuadrature", "FileIO", "ForwardDiff", "IterativeSolvers", "LaTeXStrings", "LinearAlgebra", "LinearMaps", "PlotUtils", "PyCall", "RecipesBase", "Reexport", "Serialization", "SparseArrays", "SpecialFunctions", "StaticArrays"]
+git-tree-sha1 = "c69a2e80d5e011cda6e62bb29acb6ed6f016c057"
 repo-rev = "master"
-repo-url = "/mnt/g/Research/ViscousFlow.jl"
+repo-url = "https://github.com/jdeldre/ViscousFlow.jl"
 uuid = "103da179-b3e4-57c1-99a4-586354eb2c5a"
-version = "0.1.6"
+version = "0.1.8"
 
 [[WeakRefStrings]]
 deps = ["Random", "Test"]

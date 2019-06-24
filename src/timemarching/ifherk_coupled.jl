@@ -172,13 +172,13 @@ function construct_saddlesys(t::Float64, stage::Int64, rkdt_a::Matrix{Float64},
 
     # get current body points coordinates
     fsys.X̃ = getX̃(bd, bgs)
-    regop = Regularize(fsys.X̃,fsys.Δx;issymmetric=true)
-    fsys.Hmat, _ = RegularizationMatrix(regop,VectorData{N}(),Edges{Primal,NX,NY}())
+    regop_H = Regularize(fsys.X̃,fsys.Δx;weights=fsys.Δx^2, ddftype = Fields.Yang3)
+    fsys.Hmat = RegularizationMatrix(regop_H,fsys.Vb,fsys.Fq)
 
     # Fluid operators
     B₁ᵀᵢ₋₁ = f -> B₁ᵀ(f, fsys)
 
-    # FSI operators
+    # FSI operators, smooth f before going into body solver
     T₁ᵀᵢ₋₁ = f -> T₁ᵀ(bd, bgs, f)
 
     # Integrate joints qJ and update bs and js in timemarching
@@ -194,8 +194,8 @@ function construct_saddlesys(t::Float64, stage::Int64, rkdt_a::Matrix{Float64},
 
     # get current body points coordinates
     fsys.X̃ = getX̃(bd, bgs)
-    regop = Regularize(fsys.X̃,fsys.Δx;issymmetric=true)
-    _, fsys.Emat = RegularizationMatrix(regop,VectorData{N}(),Edges{Primal,NX,NY}())
+    regop_E = Regularize(fsys.X̃,fsys.Δx;weights=fsys.Δx^2, ddftype = Fields.Yang3)
+    fsys.Emat = InterpolationMatrix(regop_E,fsys.Fq,fsys.Vb)
 
     # Fluid operators
     B₂ᵢ = w -> B₂(w, fsys)        # Fluid operators
