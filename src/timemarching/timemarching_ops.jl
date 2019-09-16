@@ -58,6 +58,9 @@ end
 
 
 # wrap functions from Dyn3d
+function TimeMarching.M(bd::BodyDyn)
+    return HERKFuncM(bd.sys)
+end
 function TimeMarching.M⁻¹(bd::BodyDyn)
     return HERKFuncM⁻¹(bd.sys)
 end
