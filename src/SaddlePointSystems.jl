@@ -1,14 +1,14 @@
 module SaddlePointSystems
 
-using IterativeSolvers
 using LinearMaps
 using LinearAlgebra
+using IterativeSolvers
 
 import Base: \,+,*
 import LinearAlgebra: ldiv!, inv
 
 using ..Fields:VectorData, ScalarData
-export SaddleSystem1d
+export SaddleSystem1d,SaddleSystem2d
 
 # import ViscousFlow.SaddlePointSystems with a different name
 using ImportMacros
@@ -54,6 +54,6 @@ function(*)(S::Matrix{T},a::VectorData) where T<: Real
 end
 
 include("saddlepointsystem/saddlepointsystem_1dbody.jl")
-#include("saddlepointsystem/saddlepointsystem_2dbody.jl")
+include("saddlepointsystem/saddlepointsystem_2dbody.jl")
 
 end

@@ -12,11 +12,11 @@ function TimeMarching.r₁(w::Nodes{Dual,NX,NY},t,sys::FluidStruct{NX,NY}) where
   L = sys.L
   Δx⁻¹ = 1/sys.Δx
 
-  cellshift!(Qq,curl(L\w)) # -velocity, on dual edges
+  interpolate!(Qq,curl(L\w)) # -velocity, on dual edges
   Qq.u .-= sys.U∞[1]
   Qq.v .-= sys.U∞[2]
 
-  return rmul!(divergence(Qq∘cellshift!(Ww,w)),Δx⁻¹) # -∇⋅(wu)
+  return rmul!(divergence(Qq∘interpolate!(Ww,w)),Δx⁻¹) # -∇⋅(wu)
 
 end
 
@@ -29,12 +29,12 @@ function TimeMarching.r₁(w::Nodes{Dual,NX,NY},t,sys::FluidStruct{NX,NY},U∞::
   L = sys.L
   Δx⁻¹ = 1/sys.Δx
 
-  cellshift!(Qq,curl(L\w)) # -velocity, on dual edges
+  interpolate!(Qq,curl(L\w)) # -velocity, on dual edges
   _,ċ,_,_,_,_ = U∞(t)
   Qq.u .-= real(ċ)
   Qq.v .-= imag(ċ)
 
-  return rmul!(divergence(Qq∘cellshift!(Ww,w)),Δx⁻¹) # -∇⋅(wu)
+  return rmul!(divergence(Qq∘interpolate!(Ww,w)),Δx⁻¹) # -∇⋅(wu)
 
 end
 
@@ -61,16 +61,18 @@ end
 function TimeMarching.M(bd::BodyDyn)
     return HERKFuncM(bd.sys)
 end
-function TimeMarching.M⁻¹(bd::BodyDyn)
-    return HERKFuncM⁻¹(bd.sys)
-end
 
 # Whenever buoyancy needs to be accounted for, it means that the body has finite
 # volume in x-y space. Thus the body must account for fictitious fluid effect as
 # well. These two effects got accounted for by setting ρ in theory to ρ-1 in code
 function TimeMarching.F(bd::BodyDyn)
     f_exi = zeros(Float64,bd.sys.nbody,6)
-    return HERKFuncf(bd.bs, bd.js, bd.sys, f_exi)
+    return HERKFuncf(bd.bs, bd.js, bd.sys, f_exi; influid=true, bodydim=1)
+end
+
+function TimeMarching.F(bd::BodyDyn,ρb::Float64)
+    f_exi = zeros(Float64,bd.sys.nbody,6)
+    return HERKFuncf(bd.bs, bd.js, bd.sys, f_exi; influid=true, bodydim=2, ρb=ρb)
 end
 
 function TimeMarching.G₁ᵀ(bd::BodyDyn)
@@ -124,7 +126,7 @@ end
 """
     T₁ᵀ(bd::BodyDyn,bgs::Vector{BodyGrid},f::VectorData,Δx::Float64;plane::Vector{Int}=[1,2])
 
-T₁ᵀ takes in 2d x-y plane fluid force f of all body grid points in VectorData form
+T₁ᵀ takes in 2d x-y plane fluid force per unit are f of all body grid points in VectorData form
 and calculate integrated force on each body in 1d Vector form(line up dimension of nbody*6_dof).
 
 Note that force from fluid solver need to be multiplied by Δx^2 before going into body solver.
@@ -153,10 +155,9 @@ function TimeMarching.T₁ᵀ(bd::BodyDyn,bgs::Vector{BodyGrid},f::VectorData,Δ
 
     # Integrate total forces from all body points on a body
     # then transform the external forces from inertial frame to body frame
-    # Mind Newton's 3rd law(the negative sign)
     bgs = IntegrateBodyGridDynamics(bd,bgs)
     for i = 1:bd.sys.nbody
-        f_exis[i,:] = -bgs[i].f_ex6d
+        f_exis[i,:] = bgs[i].f_ex6d
         f_exis[i,:] = bd.bs[i].Xb_to_i'*f_exis[i,:]
     end
 
