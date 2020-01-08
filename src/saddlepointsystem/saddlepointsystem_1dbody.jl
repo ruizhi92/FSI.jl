@@ -44,7 +44,8 @@ struct SaddleSystem1d{TC,TF,TU,Tλ,FAB,FT1,FT2,FSF,Nf,Nλ}
     # fluid and body Schur complement
     Sf :: FSF   # B₂Hᵢ₋₁,ᵢB₁ᵀ
     Sf⁻¹mat :: Matrix{Float64}
-    Sb :: LinearMap   # G₂M⁻¹G₁ᵀ
+    # Sb :: LinearMap   # G₂M⁻¹G₁ᵀ
+    Sbmat :: Matrix{Float64}   # G₂M⁻¹G₁ᵀ
 
     # scratch space
     fbuffer :: TF
@@ -81,16 +82,16 @@ function (::Type{SaddleSystem1d})(state::Tuple{TC,TF,TU,Tλ},
     end
     A⁻¹, B₁ᵀ, B₂ = fops
 
-    # check for body methods
-    bsys = (M, G₁ᵀ, G₂)
-    boptypes = (TU,Tλ,TU)
-    bopnames = ("M","G₁ᵀ","G₂")
-    bops = []
-
-    for (i,typ) in enumerate(boptypes)
-        push!(bops,x->bsys[i]*x)
-    end
-    M, G₁ᵀ, G₂ = bops
+    # # check for body methods
+    # bsys = (M, G₁ᵀ, G₂)
+    # boptypes = (TU,Tλ,TU)
+    # bopnames = ("M","G₁ᵀ","G₂")
+    # bops = []
+    #
+    # for (i,typ) in enumerate(boptypes)
+    #     push!(bops,x->bsys[i]*x)
+    # end
+    # M, G₁ᵀ, G₂ = bops
 
     ċbuffer = deepcopy(ċ)
     fbuffer = deepcopy(f)
@@ -106,25 +107,45 @@ function (::Type{SaddleSystem1d})(state::Tuple{TC,TF,TU,Tλ},
                 issymmetric=false,isposdef=true,store=true,precompile=true)
     Sf⁻¹mat = -inv(Sf.S⁻¹)
 
-    # body saddlesystem Sb
-    Mmod(u̇::TU) = M(u̇) + T₁ᵀ(Sf⁻¹mat*T₂(u̇))
-    out = zeros(Nu̇+Nλ)
-    function lhsmat(x::AbstractVector{Float64})
-        u̇buffer .= x[1:Nu̇]
-        λbuffer .= x[Nu̇+1:end]
-        out[1:Nu̇] .= Mmod(u̇buffer)
-        out[1:Nu̇] .+= G₁ᵀ(λbuffer)
-        out[Nu̇+1:end] .= G₂(u̇buffer)
-        return out
+#     # body saddlesystem Sb
+#     Mmod(u̇::TU) = M(u̇) + T₁ᵀ(Sf⁻¹mat*T₂(u̇))
+#     out = zeros(Nu̇+Nλ)
+#     function lhsmat(x::AbstractVector{Float64})
+#         u̇buffer .= x[1:Nu̇]
+#         λbuffer .= x[Nu̇+1:end]
+#         out[1:Nu̇] .= Mmod(u̇buffer)
+#         out[1:Nu̇] .+= G₁ᵀ(λbuffer)
+#         out[Nu̇+1:end] .= G₂(u̇buffer)
+#         return out
+#     end
+#     Sb = LinearMap(lhsmat,Nu̇+Nλ;ismutating=false,issymmetric=false,isposdef=true)
+
+    Sbmat = zeros(Nu̇+Nλ,Nu̇+Nλ)
+    Stmpmat = zeros(Nu̇,Nu̇)
+
+    T₁ᵀSf⁻¹T₂(u̇) = T₁ᵀ(Sf⁻¹mat*T₂(u̇))
+    Stmp = LinearMap(T₁ᵀSf⁻¹T₂,Nu̇;ismutating=false,issymmetric=false,isposdef=true)
+
+    ubuffer_tmp1 = zeros(Nu̇)
+    ubuffer_tmp2 = zeros(Nu̇)
+    for i = 1:Nu̇
+      ubuffer_tmp1[i] = 1.0
+      ubuffer_tmp2 .= Stmp*ubuffer_tmp1
+      Stmpmat[:,i] .= ubuffer_tmp2
+      ubuffer_tmp1[i] = 0.0
     end
-    Sb = LinearMap(lhsmat,Nu̇+Nλ;ismutating=false,issymmetric=false,isposdef=true)
+
+    Sbmat[1:Nu̇,1:Nu̇] .= M
+    Sbmat[1:Nu̇,1:Nu̇] .+= Stmpmat
+    Sbmat[1:Nu̇,Nu̇+1:end] .= G₁ᵀ
+    Sbmat[Nu̇+1:end,1:Nu̇] .= G₂
 
     # functions for correction step
     A⁻¹B₁ᵀ(f::TF) = (A⁻¹∘B₁ᵀ)(f)
 
     # create the saddle system
     saddlesys1d = SaddleSystem1d{TC,TF,TU,Tλ,typeof(A⁻¹B₁ᵀ),typeof(T₁ᵀ),typeof(T₂),typeof(Sf),Nf,Nλ}(
-                                A⁻¹B₁ᵀ,ċbuffer,T₁ᵀ,T₂,Sf,Sf⁻¹mat,Sb,fbuffer,u̇buffer,tmpvec,tol)
+                                A⁻¹B₁ᵀ,ċbuffer,T₁ᵀ,T₂,Sf,Sf⁻¹mat,Sbmat,fbuffer,u̇buffer,tmpvec,tol)
 
     return saddlesys1d
 end
@@ -153,7 +174,8 @@ function ldiv!(state::Tuple{TC,TF,TU,Tλ},
     sys.u̇buffer .= sys.T₁ᵀ(f)
     ru̇ .+= sys.u̇buffer
     sys.tmpvec .= [ru̇;rλ]
-    sys.tmpvec .= gmres(sys.Sb, sys.tmpvec, tol=sys.tol)
+    # sys.tmpvec .= gmres(sys.Sb, sys.tmpvec)
+    sys.tmpvec .= sys.Sbmat\sys.tmpvec
     Nu̇ = length(u̇)
     u̇ .= sys.tmpvec[1:Nu̇]
     λ .= sys.tmpvec[Nu̇+1:end]
@@ -166,7 +188,6 @@ function ldiv!(state::Tuple{TC,TF,TU,Tλ},
     sys.A⁻¹B₁ᵀf .= sys.A⁻¹B₁ᵀ(sys.fbuffer)
     ċ .+= sys.A⁻¹B₁ᵀf
     f .-= sys.fbuffer
-
     state = ċ, f, u̇, λ
 end
 
