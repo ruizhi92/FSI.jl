@@ -131,7 +131,8 @@ and calculate integrated force on each body in 1d Vector form(line up dimension 
 
 Note that force from fluid solver need to be multiplied by Δx^2 before going into body solver.
 """
-function TimeMarching.T₁ᵀ(bd::BodyDyn,bgs::Vector{BodyGrid},f::VectorData,Δx::Float64;plane::Vector{Int}=[1,2])
+function TimeMarching.T₁ᵀ(bd::BodyDyn,bgs::Vector{BodyGrid},f::VectorData,
+    Δx::Float64; gap::Bool=true,plane::Vector{Int}=[1,2])
 
     fbuffer = deepcopy(f)
     fbuffer .*= Δx^2
@@ -142,6 +143,7 @@ function TimeMarching.T₁ᵀ(bd::BodyDyn,bgs::Vector{BodyGrid},f::VectorData,Δ
     f_exis = zeros(bd.sys.nbody,6)
     np_total = round(Int,length(fbuffer)/2)
 
+    # assign values from f to bgs structure at every Lagrangian point
     for i = 1:np_total
         # move to the next bgs if i exceed bgs[b_cnt].np
         if i > ref + bgs[b_cnt].np
@@ -150,17 +152,104 @@ function TimeMarching.T₁ᵀ(bd::BodyDyn,bgs::Vector{BodyGrid},f::VectorData,Δ
         end
         bgs[b_cnt].f_ex3d[i-ref][plane[1]] = fbuffer.u[i]
         bgs[b_cnt].f_ex3d[i-ref][plane[2]] = fbuffer.v[i]
-        bgs[b_cnt].m_ex3d[i-ref] .= cross(bgs[b_cnt].q_i[i-ref],bgs[b_cnt].f_ex3d[i-ref])
+        bgs[b_cnt].m_ex3d[i-ref] .= 0.0
     end
 
-    # Integrate total forces from all body points on a body
-    # then transform the external forces from inertial frame to body frame
-    bgs = IntegrateBodyGridDynamics(bd,bgs)
-    for i = 1:bd.sys.nbody
-        f_exis[i,:] = bgs[i].f_ex6d
-        f_exis[i,:] = bd.bs[i].Xb_to_i'*f_exis[i,:]
+    # use trapezoidal rule for force and torque
+    # for 2d body (cylinder)
+    if plane == [1,3]
+        for i = 1:length(bgs)
+            # forces acting at the middle of two points
+            for j = 1:bgs[i].np-1
+                bgs[i].f_ex3d[j] .= 0.5*bgs[i].f_ex3d[j] .+ 0.5*bgs[i].f_ex3d[j+1]
+            end
+            bgs[i].f_ex3d[end] .= 0.5*bgs[i].f_ex3d[end] .+ 0.5*bgs[i].f_ex3d[1]
+            # torque
+            for j = 1:bgs[i].np-1
+                bgs[i].m_ex3d[j] .= cross(0.5*(bgs[i].q_i[j]+bgs[i].q_i[j+1]), bgs[i].f_ex3d[j])
+            end
+            bgs[i].m_ex3d[end] .= cross(0.5*(bgs[i].q_i[end]+bgs[i].q_i[1]), bgs[i].f_ex3d[end])
+        end
+
+        # Integrate total forces from all body points on a body
+        # then transform the external forces from inertial frame to body frame
+        bgs = IntegrateBodyGridDynamics(bd,bgs)
+        for i = 1:bd.sys.nbody
+            f_exis[i,:] = bgs[i].f_ex6d
+            f_exis[i,:] = bd.bs[i].Xb_to_i'*f_exis[i,:]
+        end
+
+    # for 1d body (plate)
+    elseif plane == [1,2]
+        # there exists gap between bodies, i.e. bodies not connected to each other
+        if gap==true
+            for i = 1:length(bgs)
+                # forces acting at the middle of two points
+                for j = 1:bgs[i].np-1
+                    bgs[i].f_ex3d[j] .= 0.5*bgs[i].f_ex3d[j] .+ 0.5*bgs[i].f_ex3d[j+1]
+                end
+                bgs[i].f_ex3d[end] .= 0.0
+                # torque
+                for j = 1:bgs[i].np-1
+                    bgs[i].m_ex3d[j] .= cross(0.5*(bgs[i].q_i[j]+bgs[i].q_i[j+1]), bgs[i].f_ex3d[j])
+                end
+                bgs[i].m_ex3d[end] .= 0.0
+            end
+        # no gap between bodies, i.e. connected bodies
+        else
+            if length(bgs) > 1
+                # force of last body, points assigned in reverse order
+                for j = bgs[end].np:-1:2
+                    bgs[end].f_ex3d[j] .= 0.5*bgs[end].f_ex3d[j-1] .+ 0.5*bgs[end].f_ex3d[j]
+                end
+                bgs[end].f_ex3d[1] .= 0.25*bgs[end-1].f_ex3d[end] .+ 0.5*bgs[end].f_ex3d[1]
+
+                # force of last-1 to second body, points assigned in reverse order
+                for i = length(bgs):-1:2
+                    bgs[i].f_ex3d[end] .= 0.5*bgs[i].f_ex3d[end-1] .+ 0.25*bgs[i].f_ex3d[end]
+                    for j = bgs[i].np-1:-1:2
+                        bgs[i].f_ex3d[j] .= 0.5*bgs[i].f_ex3d[j-1] .+ 0.5*bgs[i].f_ex3d[j]
+                    end
+                    bgs[i].f_ex3d[1] .= 0.25*bgs[i-1].f_ex3d[end] .+ 0.5*bgs[i].f_ex3d[1]
+                end
+
+                # torque of second to last body
+                for i = 2:length(bgs)
+                    bgs[i].m_ex3d[1] .= cross(0.5*(bgs[i-1].q_i[end]+bgs[i].q_i[1]), bgs[i].f_ex3d[1])
+                    for j = 2:bgs[i].np
+                        bgs[i].m_ex3d[j] .= cross(0.5*(bgs[i].q_i[j-1]+bgs[i].q_i[j]), bgs[i].f_ex3d[j])
+                    end
+                end
+            end
+
+            # force of first body,  points assigned in reverse order
+            bgs[1].f_ex3d[end-1] .= 0.5*bgs[1].f_ex3d[end-1] .+ 0.25*bgs[1].f_ex3d[end]
+            bgs[1].f_ex3d[end] .= 0.0
+            for j = bgs[1].np-2:-1:1
+                bgs[1].f_ex3d[j] .= 0.5*bgs[1].f_ex3d[j] .+ 0.5*bgs[1].f_ex3d[j+1]
+            end
+
+            # torque of first body
+            for j = 1:bgs[1].np-1
+                bgs[1].m_ex3d[j] .= cross(0.5*(bgs[1].q_i[j]+bgs[1].q_i[j+1]), bgs[1].f_ex3d[j])
+            end
+            bgs[1].m_ex3d[end] .= 0.0
+        end
+
+        # Integrate total forces from all body points on a body
+        # then transform the external forces from inertial frame to body frame
+        bgs = IntegrateBodyGridDynamics(bd,bgs)
+        for i = 1:bd.sys.nbody
+            f_exis[i,:] = bgs[i].f_ex6d
+            f_exis[i,:] = bd.bs[i].Xb_to_i'*f_exis[i,:]
+
+        end
+    else
+        error("The current body at the current plane is not supported. Check function T₁ᵀ.")
     end
 
+
+# println("fluid force of last body in body coord", f_exis[end,3:5])
     return (f_exis')[:]
 end
 
@@ -168,8 +257,9 @@ end
 """
     T₂(bd::BodyDyn,bgs::Vector{BodyGrid},u::Array{Float64,1};plane::Vector{Int}=[1,2])
 
-T₂ takes in the lined-up 6d spatial velocity of all body in 1d Vector form and
-acquire body grid points's x-y plane 2d velocity to return VectorData
+T₂ takes in the lined-up 6d spatial velocity of all body in each of their own
+coordinate in 1d Vector form and acquire body grid points's x-y plane 2d velocity
+in the inertial frame. Return data in the VectorData form.
 """
 function TimeMarching.T₂(bd::BodyDyn,bgs::Vector{BodyGrid},u::Array{Float64,1};plane::Vector{Int}=[1,2])
     @get bd (bs, sys)
@@ -198,8 +288,8 @@ function TimeMarching.T₂(bd::BodyDyn,bgs::Vector{BodyGrid},u::Array{Float64,1}
     for i = 1:length(bgs)
         b = bs[bgs[i].bid]
         for j = 1:bgs[i].np
-            v_temp = bs[i].v + [zeros(Float64, 3); cross(bs[i].v[1:3],bgs[i].points[j])]
-            bgs[i].v_i[j] = (X_ref*b.Xb_to_i*v_temp)[4:6]
+            v_temp = [zeros(Float64, 3);bs[i].v[4:6]] + [zeros(Float64, 3); cross(bs[i].v[1:3],bgs[i].points[j])]
+            bgs[i].v_i[j] = (b.Xb_to_i*v_temp)[4:6]
         end
     end
 
