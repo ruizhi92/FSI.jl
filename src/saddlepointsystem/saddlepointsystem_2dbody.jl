@@ -126,6 +126,8 @@ function (::Type{SaddleSystem2d})(state::Tuple{TC,TF,TU,Tλ},
     # end
     # Sb = LinearMap(lhsmat,Nu̇+Nλ;ismutating=false,issymmetric=false,isposdef=true)
 
+    Mf(u̇::TU) = 1.0/ρb*M*u̇
+
     Sbmat = zeros(Nu̇+Nλ,Nu̇+Nλ)
     Stmpmat = zeros(Nu̇,Nu̇)
 
@@ -141,8 +143,9 @@ function (::Type{SaddleSystem2d})(state::Tuple{TC,TF,TU,Tλ},
       ubuffer_tmp1[i] = 0.0
     end
 
-    Sbmat[1:Nu̇,1:Nu̇] .= M
+    Sbmat[1:Nu̇,1:Nu̇] .= (1-1.0/ρb)*M
     Sbmat[1:Nu̇,1:Nu̇] .+= Stmpmat
+
     Sbmat[1:Nu̇,Nu̇+1:end] .= G₁ᵀ
     Sbmat[Nu̇+1:end,1:Nu̇] .= G₂
 
