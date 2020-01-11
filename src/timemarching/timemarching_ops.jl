@@ -248,8 +248,6 @@ function TimeMarching.T₁ᵀ(bd::BodyDyn,bgs::Vector{BodyGrid},f::VectorData,
         error("The current body at the current plane is not supported. Check function T₁ᵀ.")
     end
 
-
-# println("fluid force of last body in body coord", f_exis[end,3:5])
     return (f_exis')[:]
 end
 
@@ -288,7 +286,9 @@ function TimeMarching.T₂(bd::BodyDyn,bgs::Vector{BodyGrid},u::Array{Float64,1}
     for i = 1:length(bgs)
         b = bs[bgs[i].bid]
         for j = 1:bgs[i].np
-            v_temp = [zeros(Float64, 3);bs[i].v[4:6]] + [zeros(Float64, 3); cross(bs[i].v[1:3],bgs[i].points[j])]
+            v_temp[1:3] .= 0.0
+            v_temp[4:6] .= bs[i].v[4:6]
+            v_temp[4:6] .+= cross(bs[i].v[1:3],bgs[i].points[j])
             bgs[i].v_i[j] = (b.Xb_to_i*v_temp)[4:6]
         end
     end
