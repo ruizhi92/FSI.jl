@@ -216,11 +216,19 @@ function construct_saddlesys(t::Float64, stage::Int64, rkdt_a::Matrix{Float64},
                          (Mᵢ₋₁, G₁ᵀᵢ₋₁, G₂ᵢ),
                          (T₁ᵀᵢ₋₁, T₂ᵢ))
     elseif bodydim == 2
-        S = SaddleSystem2d((w, f, v, λ),
-                         (H, B₁ᵀᵢ₋₁, B₂ᵢ),
-                         (Mᵢ₋₁, G₁ᵀᵢ₋₁, G₂ᵢ),
-                         (T₁ᵀᵢ₋₁, T₂ᵢ),
-                         ρb=ρb)
+        if ρb != 0.0
+            S = SaddleSystem2d((w, f, v, λ),
+                             (H, B₁ᵀᵢ₋₁, B₂ᵢ),
+                             (Mᵢ₋₁, G₁ᵀᵢ₋₁, G₂ᵢ),
+                             (T₁ᵀᵢ₋₁, T₂ᵢ),
+                             ρb=ρb)
+        else
+            S = SaddleSystem2d((w, f, v, λ),
+                             (H, B₁ᵀᵢ₋₁, B₂ᵢ),
+                             (Mᵢ₋₁, G₁ᵀᵢ₋₁, G₂ᵢ),
+                             (T₁ᵀᵢ₋₁, T₂ᵢ),
+                             ρb=ρb, Mf=TimeMarching.Mf(bd))
+        end
     else
         error("3d not supported for now")
     end

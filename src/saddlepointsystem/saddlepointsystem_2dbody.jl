@@ -33,19 +33,18 @@ The optional argument `tol` sets the tolerance for iterative solution (if
 - `T₂` : operator evaluating the influence of body state on fluid constraints,
             acting on `u̇` and returning type `f`
 """
-struct SaddleSystem2d{TC,TF,TU,Tλ,FAB,FMF,FT1,FT2,FSF,Nf,Nλ}
+struct SaddleSystem2d{TC,TF,TU,Tλ,FAB,FT1,FT2,FSF,Nf,Nλ}
 
     # basic operators needed
     A⁻¹B₁ᵀ :: FAB
     A⁻¹B₁ᵀf :: TC
-    Mf :: FMF
+    Mf :: Matrix{Float64}
     T₁ᵀ :: FT1
     T₂ :: FT2
 
     # fluid and body Schur complement
     Sf :: FSF   # B₂Hᵢ₋₁,ᵢB₁ᵀ
     Sf⁻¹mat :: Matrix{Float64}
-    # Sb :: LinearMap   # G₂M⁻¹G₁ᵀ
     Sbmat :: Matrix{Float64}   # G₂M⁻¹G₁ᵀ
 
     # scratch space
@@ -61,7 +60,8 @@ function (::Type{SaddleSystem2d})(state::Tuple{TC,TF,TU,Tλ},
                                 bodyop::Tuple{FM,FG1,FG2},
                                 fsiop::Tuple{FT1,FT2};
                                 tol::Float64=1e-3,
-                                ρb::Float64=1.0) where {TC,TF,TU,Tλ,FA,FB1,FB2,FM,FG1,FG2,FT1,FT2}
+                                ρb::Float64=1.0,
+                                Mf::Matrix{Float64}=1.0/ρb*bodyop[1]) where {TC,TF,TU,Tλ,FA,FB1,FB2,FM,FG1,FG2,FT1,FT2}
     ċ, f, u̇, λ = state
 
     A⁻¹, B₁ᵀ, B₂ = fluidop
@@ -85,17 +85,7 @@ function (::Type{SaddleSystem2d})(state::Tuple{TC,TF,TU,Tλ},
     end
     A⁻¹, B₁ᵀ, B₂ = fops
 
-    # # check for body methods
-    # bsys = (M, G₁ᵀ, G₂)
-    # boptypes = (TU,Tλ,TU)
-    # bopnames = ("M","G₁ᵀ","G₂")
-    # bops = []
-    #
-    # for (i,typ) in enumerate(boptypes)
-    #     push!(bops,x->bsys[i]*x)
-    # end
-    # M, G₁ᵀ, G₂ = bops
-
+    # sractch space
     ċbuffer = deepcopy(ċ)
     fbuffer_1 = deepcopy(f)
     fbuffer_2 = deepcopy(f)
@@ -111,35 +101,13 @@ function (::Type{SaddleSystem2d})(state::Tuple{TC,TF,TU,Tλ},
                 issymmetric=false,isposdef=true,store=true,precompile=true)
     Sf⁻¹mat = -inv(Sf.S⁻¹)
 
-    # # body saddlesystem Sb
-    # Mf(u̇::TU) = 1.0/ρb*M(u̇::TU)
-    # Mmod(u̇::TU) = M(u̇) + T₁ᵀ(Sf⁻¹mat*T₂(u̇)) - Mf(u̇)
-    #
-    # out = zeros(Nu̇+Nλ)
-    # function lhsmat(x::AbstractVector{Float64})
-    #     u̇buffer .= x[1:Nu̇]
-    #     λbuffer .= x[Nu̇+1:end]
-    #     out[1:Nu̇] .= Mmod(u̇buffer)
-    #     out[1:Nu̇] .+= G₁ᵀ(λbuffer)
-    #     out[Nu̇+1:end] .= G₂(u̇buffer)
-    #     return out
-    # end
-    # Sb = LinearMap(lhsmat,Nu̇+Nλ;ismutating=false,issymmetric=false,isposdef=true)
-
-    function Mf(u̇::TU)
-        if ρb != 0.0
-            return 1.0/ρb*M*u̇
-        else
-            return 0.0*M*u̇
-        end
-    end
-
+    # store rigid body saddlesystem in matrix
     Sbmat = zeros(Nu̇+Nλ,Nu̇+Nλ)
     Stmpmat = zeros(Nu̇,Nu̇)
 
+    # T₁ᵀSf⁻¹T₂
     T₁ᵀSf⁻¹T₂(u̇) = T₁ᵀ(Sf⁻¹mat*T₂(u̇))
     Stmp = LinearMap(T₁ᵀSf⁻¹T₂,Nu̇;ismutating=false,issymmetric=false,isposdef=true)
-
     ubuffer_tmp1 = zeros(Nu̇)
     ubuffer_tmp2 = zeros(Nu̇)
     for i = 1:Nu̇
@@ -149,9 +117,12 @@ function (::Type{SaddleSystem2d})(state::Tuple{TC,TF,TU,Tλ},
       ubuffer_tmp1[i] = 0.0
     end
 
+    # M-Mf
     Sbmat[1:Nu̇,1:Nu̇] .= Stmpmat
     if ρb != 0.0
         Sbmat[1:Nu̇,1:Nu̇] .+= (1-1.0/ρb)*M
+    else
+        Sbmat[1:Nu̇,1:Nu̇] .-= Mf
     end
     Sbmat[1:Nu̇,Nu̇+1:end] .= G₁ᵀ
     Sbmat[Nu̇+1:end,1:Nu̇] .= G₂
@@ -159,14 +130,14 @@ function (::Type{SaddleSystem2d})(state::Tuple{TC,TF,TU,Tλ},
     # functions for correction step
     A⁻¹B₁ᵀ(f::TF) = (A⁻¹∘B₁ᵀ)(f)
 
-    saddlesys2d = SaddleSystem2d{TC,TF,TU,Tλ,typeof(A⁻¹B₁ᵀ),typeof(Mf),typeof(T₁ᵀ),typeof(T₂),typeof(Sf),Nf,Nλ}(
+    saddlesys2d = SaddleSystem2d{TC,TF,TU,Tλ,typeof(A⁻¹B₁ᵀ),typeof(T₁ᵀ),typeof(T₂),typeof(Sf),Nf,Nλ}(
                                 A⁻¹B₁ᵀ,ċbuffer,Mf,T₁ᵀ,T₂,Sf,Sf⁻¹mat,Sbmat,fbuffer_1,fbuffer_2,u̇buffer,tmpvec,tol)
 
     return saddlesys2d
 end
 
 
-function Base.show(io::IO, S::SaddleSystem2d{TC,TF,TU,Tλ,FAB,FMF,FT1,FT2,FSF,Nf,Nλ}) where {TC,TF,TU,Tλ,FAB,FMF,FT1,FT2,FSF,Nf,Nλ}
+function Base.show(io::IO, S::SaddleSystem2d{TC,TF,TU,Tλ,FAB,FT1,FT2,FSF,Nf,Nλ}) where {TC,TF,TU,Tλ,FAB,FT1,FT2,FSF,Nf,Nλ}
     println(io, "Saddle system with $Nf constraints on fluid and $Nλ constraints on 2d body")
     println(io, "   Fluid state of type $TC")
     println(io, "   Fluid force of type $TF")
@@ -189,7 +160,6 @@ function ldiv!(state::Tuple{TC,TF,TU,Tλ},
     sys.u̇buffer .= sys.T₁ᵀ(f)
     ru̇ .+= sys.u̇buffer
     sys.tmpvec .= [ru̇;rλ]
-    # sys.tmpvec .= gmres(sys.Sb, sys.tmpvec, tol=sys.tol)
     sys.tmpvec .= sys.Sbmat\sys.tmpvec
     Nu̇ = length(u̇)
     u̇ .= sys.tmpvec[1:Nu̇]
@@ -201,7 +171,7 @@ function ldiv!(state::Tuple{TC,TF,TU,Tλ},
 
     # correct fluid state and force with moving body effect
     sys.A⁻¹B₁ᵀf .= sys.A⁻¹B₁ᵀ(sys.fbuffer_1)
-    sys.u̇buffer .= sys.Mf(u̇)
+    sys.u̇buffer .= sys.Mf*u̇
     sys.fbuffer_2 .= sys.T₂(sys.u̇buffer)
     sys.fbuffer_1 .-= sys.fbuffer_2
     ċ .+= sys.A⁻¹B₁ᵀf

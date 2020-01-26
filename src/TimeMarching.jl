@@ -29,6 +29,7 @@ function plan_constraints end
 
 # function scaffold for rigid body systems
 function M end
+function Mf end
 function F end
 function G₁ᵀ end
 function G₂ end

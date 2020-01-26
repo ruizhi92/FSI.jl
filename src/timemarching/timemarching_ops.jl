@@ -57,9 +57,14 @@ function TimeMarching.B₂(w,sys::FluidStruct{NX,NY,N}) where {NX,NY,N}
 end
 
 
-# wrap functions from Dyn3d
+# inertia matrix for body system
 function TimeMarching.M(bd::BodyDyn)
     return HERKFuncM(bd.sys)
+end
+
+# inertia matrix for fictitious fluid when ρb=0.0
+function TimeMarching.Mf(bd::BodyDyn)
+    return HERKFuncMf(bd.sys)
 end
 
 # Whenever buoyancy needs to be accounted for, it means that the body has finite
@@ -275,20 +280,12 @@ function TimeMarching.T₂(bd::BodyDyn,bgs::Vector{BodyGrid},u::Array{Float64,1}
 
     # the j-th v_i in body points of a body is calculated by transferring to
     # a coordinate that sits at the beginning point of the first body but with zero angle.
-    X_ref = zeros(Float64,6)
-    for i = 1:length(bgs)
-        b = bs[bgs[i].bid]
-        if b.bid == 1
-            X_ref = TransMatrix([zeros(Float64,3);b.x_i],la_tmp1,la_tmp2)
-        end
-    end
-
     for i = 1:length(bgs)
         b = bs[bgs[i].bid]
         for j = 1:bgs[i].np
             v_temp[1:3] .= 0.0
-            v_temp[4:6] .= bs[i].v[4:6]
-            v_temp[4:6] .+= cross(bs[i].v[1:3],bgs[i].points[j])
+            v_temp[4:6] .= b.v[4:6]
+            v_temp[4:6] .+= cross(b.v[1:3],bgs[i].points[j])
             bgs[i].v_i[j] = (b.Xb_to_i*v_temp)[4:6]
         end
     end
