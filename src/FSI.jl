@@ -18,15 +18,15 @@ using Reexport
 
 # modules from FSI
 include("SaddlePointSystems.jl")
-# import SaddlePointSystems
 @reexport using .SaddlePointSystems
 
 include("Systems.jl")
-# import Systems
 @reexport using .Systems
 
 include("TimeMarching.jl")
-# import TimeMarching
 @reexport using .TimeMarching
+
+include("Tools.jl")
+@reexport using .Tools
 
 end
