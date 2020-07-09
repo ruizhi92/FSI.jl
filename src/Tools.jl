@@ -4,7 +4,7 @@ using LinearAlgebra
 using Interpolations
 using ..TimeMarching
 
-export fluidbody_energy, fluidbody_momentum, curve_maxima
+export fluidbody_energy, fluidbody_momentum, curve_maxima, energy_harvested
 
 """
     fluidbody_momentum
@@ -279,5 +279,56 @@ function curve_maxima(thist,a1hist)
 
 end
 
+"""
+    energy_harvested(t,q1,vJ1,q2,vJ2,c)
+
+For a 2-linked body-joint system, calculate energy harvested through damper in one
+period of oscillation, assuming both damper have the same damping coefficient c.
+
+# Arguments
+
+- `t` : history of time
+- `q2` : history of joint 2's angle
+- `vJ1` : history of joint 1's angular velocity
+- `vJ2` : history of joint 2's angular velocity
+- `c` : damping coefficient
+"""
+function energy_harvested(t,q1,q2,vJ1,vJ2,c)
+    # find out gradient of the curve using q1
+    itp1 = interpolate(Array{Float64}(q1),BSpline(Linear()))
+    g1 = [Interpolations.gradient(itp1,i)[1] for i in 1:length(t)]
+    # identify local minimum or maximum by sign of gradient
+    m1 = []
+    for i in 1:length(t)-1
+        if sign(g1[i])*sign(g1[i+1]) == -1 push!(m1,i) end
+    end
+    period1 = t[m1[end]] - t[m1[end-2]]
+
+    # find out gradient of the curve using q2
+    itp2 = interpolate(Array{Float64}(q2),BSpline(Linear()))
+    g2 = [Interpolations.gradient(itp2,i)[1] for i in 1:length(t)]
+    # identify local minimum or maximum by sign of gradient
+    m2 = []
+    for i in 1:length(t)-1
+        if sign(g2[i])*sign(g2[i+1]) == -1 push!(m2,i) end
+    end
+
+    # calculate harvested energy using time interval defined by m2
+    period2 = t[m2[end]] - t[m2[end-2]]
+    energy = 0.0
+    for i = m2[end-2]:m2[end]
+        energy += vJ1[i]^2 + vJ2[i]^2
+    end
+    energy  = energy*c/period2
+
+    # output
+    println("peak amplitude of joint 1: ",abs(q1[m1[end]]),"\n")
+    println("peak amplitude of joint 2: ",abs(q2[m2[end]]),"\n")
+    println("period of joint 1: ",period1,"\n")
+    println("period of joint 2: ",period2,"\n")
+    println("harvested energy per unit time: ",energy,"\n")
+    println("harvested energy in one period: ",energy*period2,"\n")
+    return
+end
 
 end # module end

@@ -1,6 +1,10 @@
-examples/.ipynb_checkpoints
+*/.ipynb_checkpoints
 docs/build
 *.gif
 examples/local_run
 *.jld
 *.bson
+*.mem
+*.cov
+Manifest.toml
+thesis/
