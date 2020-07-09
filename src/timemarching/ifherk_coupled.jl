@@ -38,7 +38,7 @@ struct IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR21,
     B₂ :: FB2
 
     # Body operators
-    M⁻¹ :: FM
+    M :: FM
     G₁ᵀ :: FG1
     G₂ :: FG2
     UpP :: FUPP
@@ -76,6 +76,10 @@ struct IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR21,
     # iterative solution tolerance
     tol :: Float64
 
+    # parameters for constructing saddle system
+    bodydim :: Int
+    ρb :: Float64
+
 end
 
 function (::Type{IFHERK_coupled})(Δt::Float64, bd::BodyDyn, bgs::Vector{BodyGrid},
@@ -85,12 +89,13 @@ function (::Type{IFHERK_coupled})(Δt::Float64, bd::BodyDyn, bgs::Vector{BodyGri
                 fsiop::Tuple{FT1,FT2,FX},
                 rhs::Tuple{FR11,FR12,FR21,FR22},
                 fsys::FluidStruct{NX,NY,N};
-                tol::Float64=1e-3, rk::RKParams=RK31) where {TW,TF,FI,FB1,FB2,FM,
+                tol::Float64=1e-3, rk::RKParams=RK31,
+                bodydim::Int=1, ρb::Float64=2.0) where {TW,TF,FI,FB1,FB2,FM,
                         FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR21,FR22,NX,NY,N}
 
     w, qJ, v, f, λ = state
     plan_intfact, B₁ᵀ, B₂ = fluidop
-    M⁻¹, G₁ᵀ, G₂, UpP, UpV = bodyop
+    M, G₁ᵀ, G₂, UpP, UpV = bodyop
     T₁ᵀ, T₂, getX̃ = fsiop
     r₁₁,r₁₂,r₂₁,r₂₂ = rhs
 
@@ -119,23 +124,23 @@ function (::Type{IFHERK_coupled})(Δt::Float64, bd::BodyDyn, bgs::Vector{BodyGri
 
     # preform the saddle-point systems, they are overwritten with time
     Slist = [construct_saddlesys(0.0,1,rkdt.a,bd,bgs,qJ,vJ,(w,v,f,λ),(H[i],B₁ᵀ,B₂),
-        (M⁻¹,G₁ᵀ,G₂,UpP,r₁₂,r₂₂),(T₁ᵀ,T₂,getX̃),fsys)[1][1] for i=1:rk.st]
+        (M,G₁ᵀ,G₂,UpP,r₁₂,r₂₂),(T₁ᵀ,T₂,getX̃),fsys,bodydim,ρb)[1][1] for i=1:rk.st]
     S = [Slist[i] for i in indexin(dclist,unique(dclist))]
 
     htype,_ = typeof(H).parameters
     stype,_ = typeof(S).parameters
 
     # actually construct ifherk_coupled object
-    ifherksys = IFHERK_coupled{htype,typeof(B₁ᵀ),typeof(B₂),typeof(M⁻¹),typeof(G₁ᵀ),typeof(G₂),
+    ifherksys = IFHERK_coupled{htype,typeof(B₁ᵀ),typeof(B₂),typeof(M),typeof(G₁ᵀ),typeof(G₂),
                     typeof(UpP),typeof(UpV),typeof(T₁ᵀ),typeof(T₂),typeof(getX̃),
                     typeof(r₁₁),typeof(r₁₂),typeof(r₂₁),typeof(r₂₂),stype,TW,TF}(Δt,rk,rkdt,
                                 H,B₁ᵀ,B₂,
-                                M⁻¹,G₁ᵀ,G₂,UpP,UpV,
+                                M,G₁ᵀ,G₂,UpP,UpV,
                                 T₁ᵀ,T₂,getX̃,
                                 r₁₁,r₁₂,r₂₁,r₂₂,
                                 S,bgs,
                                 w₀,qJ₀,v₀,wbuffer,vbuffer,fbuffer,λbuffer,
-                                ċ,vJ,v̇,tol)
+                                ċ,vJ,v̇,tol,bodydim,ρb)
 
     return ifherksys
 end
@@ -156,17 +161,18 @@ function construct_saddlesys(t::Float64, stage::Int64, rkdt_a::Matrix{Float64},
                              state::Tuple{TW,Vector{Float64},TF,Vector{Float64}},
                              fluidop::Tuple{FH,FB1,FB2},
                              bodyop::Tuple{FM,FG1,FG2,FUPP,FF,FGTI},
-                             fsiop::Tuple{FT1,FT2,FX},fsys::FluidStruct{NX,NY,N};
+                             fsiop::Tuple{FT1,FT2,FX},fsys::FluidStruct{NX,NY,N},
+                             bodydim::Int,ρb::Float64;
                              tol::Float64=1e-3) where {TW,TF,FH,FB1,FB2,FM,FG1,FG2,FUPP,FF,FGTI,FT1,FT2,FX,NX,NY,N}
 
     w, v, f, λ = state
     H, B₁ᵀ, B₂ = fluidop
-    M⁻¹, G₁ᵀ, G₂, UpP, F, gti = bodyop
+    M, G₁ᵀ, G₂, UpP, F, gti = bodyop
     T₁ᵀ, T₂, getX̃ = fsiop
 
     #----------------------- Operators at time tᵢ₋₁ ----------------------------
     # Body operators
-    Mᵢ₋₁ = M⁻¹(bd)
+    Mᵢ₋₁ = M(bd)
     Fᵢ₋₁ = F(bd)
     G₁ᵀᵢ₋₁ = G₁ᵀ(bd)
 
@@ -198,16 +204,34 @@ function construct_saddlesys(t::Float64, stage::Int64, rkdt_a::Matrix{Float64},
     fsys.Emat = InterpolationMatrix(regop_E,fsys.Fq,fsys.Vb)
 
     # Fluid operators
-    B₂ᵢ = w -> B₂(w, fsys)        # Fluid operators
+    B₂ᵢ = w -> B₂(w, fsys)
 
-    T₂ᵢ = v -> T₂(bd, bgs, v)     # FSI operators
+    # FSI operators
+    T₂ᵢ = v -> T₂(bd, bgs, v)
 
     # Actually call SaddleSystem
-    S = SaddleSystem((w, v, f, λ),
-                     (H, B₁ᵀᵢ₋₁, B₂ᵢ),
-                     (Mᵢ₋₁, G₁ᵀᵢ₋₁, G₂ᵢ),
-                     (T₁ᵀᵢ₋₁, T₂ᵢ))
-
+    if bodydim == 1
+        S = SaddleSystem1d((w, f, v, λ),
+                         (H, B₁ᵀᵢ₋₁, B₂ᵢ),
+                         (Mᵢ₋₁, G₁ᵀᵢ₋₁, G₂ᵢ),
+                         (T₁ᵀᵢ₋₁, T₂ᵢ))
+    elseif bodydim == 2
+        if ρb != 0.0
+            S = SaddleSystem2d((w, f, v, λ),
+                             (H, B₁ᵀᵢ₋₁, B₂ᵢ),
+                             (Mᵢ₋₁, G₁ᵀᵢ₋₁, G₂ᵢ),
+                             (T₁ᵀᵢ₋₁, T₂ᵢ),
+                             ρb=ρb)
+        else
+            S = SaddleSystem2d((w, f, v, λ),
+                             (H, B₁ᵀᵢ₋₁, B₂ᵢ),
+                             (Mᵢ₋₁, G₁ᵀᵢ₋₁, G₂ᵢ),
+                             (T₁ᵀᵢ₋₁, T₂ᵢ),
+                             ρb=ρb, Mf=TimeMarching.Mf(bd))
+        end
+    else
+        error("3d not supported for now")
+    end
     return (S, B₂ᵢ, G₂ᵢ, T₂ᵢ, Fᵢ₋₁, gtiᵢ), qJ, bd
 
 end
@@ -217,8 +241,8 @@ function (scheme::IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11
     w::TW,qJ::Vector{Float64},v::Vector{Float64},bd::BodyDyn,fsys::FluidStruct{NX,NY,N}) where {FH,FB1,
     FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11,FR12,FR21,FR22,FS,TW,TF,NX,NY,N}
 
-    @get scheme (rk,rkdt,H,B₁ᵀ,B₂,M⁻¹,G₁ᵀ,G₂,UpP,UpV,T₁ᵀ,T₂,getX̃,r₁₁,r₁₂,r₂₁,r₂₂,S,bgs,tol)
-    @get scheme (w₀,qJ₀,v₀,wbuffer,vbuffer,fbuffer,λbuffer,ċ,vJ,v̇)
+    @get scheme (rk,rkdt,H,B₁ᵀ,B₂,M,G₁ᵀ,G₂,UpP,UpV,T₁ᵀ,T₂,getX̃,r₁₁,r₁₂,r₂₁,r₂₂,S,bgs,tol)
+    @get scheme (w₀,qJ₀,v₀,wbuffer,vbuffer,fbuffer,λbuffer,ċ,vJ,v̇,bodydim,ρb)
     @get bd (bs,js,sys)
 
     f = deepcopy(fbuffer)
@@ -230,6 +254,7 @@ function (scheme::IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11
     w₀ .= w
     qJ₀ .= qJ
     v₀ .= v
+
     # update vJ using v
     bd, vJ[1] = UpV(bd, v₀)
 
@@ -240,7 +265,7 @@ function (scheme::IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11
 
         # construct saddlesys
         (S, B₂ᵢ, G₂ᵢ, T₂ᵢ, Fᵢ₋₁, gtiᵢ), qJ, bd = construct_saddlesys(tᵢ,i,rkdt.a,
-            bd,bgs,qJ₀,vJ,(w,v,f,λ),(H[i-1],B₁ᵀ,B₂),(M⁻¹,G₁ᵀ,G₂,UpP,r₁₂,r₂₂),(T₁ᵀ,T₂,getX̃),fsys)
+            bd,bgs,qJ₀,vJ,(w,v,f,λ),(H[i-1],B₁ᵀ,B₂),(M,G₁ᵀ,G₂,UpP,r₁₂,r₂₂),(T₁ᵀ,T₂,getX̃),fsys,bodydim,ρb)
 
         # forward w₀ by recursion
         w₀ .= H[i-1]*w₀
@@ -273,7 +298,7 @@ function (scheme::IFHERK_coupled{FH,FB1,FB2,FM,FG1,FG2,FUPP,FUPV,FT1,FT2,FX,FR11
         vbuffer .= Fᵢ₋₁
 
         # solve the linear system
-        ċ[i-1], v̇[i-1], f, λ = S\(wbuffer,vbuffer,fbuffer,λbuffer)
+        ċ[i-1], f, v̇[i-1], λ = S\(wbuffer,fbuffer,vbuffer,λbuffer)
 
         # forward ċ[j] by recursion
         for j = 1:i-2
