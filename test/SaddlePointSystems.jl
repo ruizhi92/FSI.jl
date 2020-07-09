@@ -66,11 +66,14 @@ end
     rf = rand(n)
     ru̇ = rand(p)
     rλ = rand(q)
-    b = [rċ;rf;ru̇;rλ];
+    b = [rċ;rf;ru̇;rλ]
+    b1 = [rċ;rf]
+    b2 = [ru̇;rλ]
 
     # test using Julia's default \ solver
-    @test isapprox(norm(S*(S\b)-b),0.0,atol=1e-10)
+    # @test isapprox(norm(S*(S\b)-b),0.0,atol=1e-10)
     @test rank(S) == m+n+p+q
+    x_theory = S\b
 
     # construct saddle point system
     ċ = zeros(m)
@@ -78,13 +81,13 @@ end
     u̇ = zeros(p)
     λ = zeros(q)
     St = SaddleSystem1d((ċ, f, u̇, λ), (A⁻¹, B₁ᵀ, B₂),
-                      (M, G₁ᵀ, G₂), (x->T₁ᵀ*x, x->T₂*x))
+                  (M, G₁ᵀ, G₂), (x->T₁ᵀ*x, x->T₂*x))
     bt = (rċ, ru̇, rf, rλ);
 
     # test using SaddlePointSystems
     aa,bb,cc,dd = St\bt
-    x = [aa;bb;cc;dd]
-    @test isapprox(norm(S*x-b),0.0,atol=1e-10)
+    x_compute = [aa;bb;cc;dd]
+    @test isapprox(norm(x_theory-x_compute),0.0,atol=1e-9)
 
 end
 
@@ -131,8 +134,9 @@ end
     b = [rċ;rf;ru̇;rλ];
 
     # test using Julia's default \ solver
-    @test isapprox(norm(S*(S\b)-b),0.0,atol=1e-10)
+    # @test isapprox(norm(S*(S\b)-b),0.0,atol=1e-10)
     @test rank(S) == m+n+p+q
+    x_theory = S\b
 
     # construct saddle point system
     ċ = zeros(m)
@@ -146,7 +150,8 @@ end
 
     # test using SaddlePointSystems
     aa,bb,cc,dd = St\bt
-    x = [aa;bb;cc;dd]
-    @test isapprox(norm(S*x-b),0.0,atol=1e-10)
+    x_compute = [aa;bb;cc;dd]
+
+    @test isapprox(norm(x_theory-x_compute),0.0,atol=1e-9)
 
 end
