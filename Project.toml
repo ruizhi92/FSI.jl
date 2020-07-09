@@ -29,3 +29,7 @@ Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 ViscousFlow = "103da179-b3e4-57c1-99a4-586354eb2c5a"
 WebIO = "0f1e0344-ec1d-5b48-a673-e5cf874b6c29"
+
+[compat]
+ViscousFlow = "0.1.8"
+Dyn3d = "0.1.1"
