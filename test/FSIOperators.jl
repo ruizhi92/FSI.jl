@@ -23,7 +23,7 @@
     config_joints = Vector{ConfigJoint}(undef,njoint)
     # set the first passive joint with no stiff and damp
     dof_1 = Dof(5, "passive", 0., 0., Motions())
-    config_joints[1] = ConfigJoint(njoint, "custom",
+    config_joints[1] = ConfigJoint(njoint, "custom_prismatic_in_y",
         [0.,0.,0.,1.0,1.0,0.], zeros(Float64,6), 0, [dof_1], [0.])
 
     bs, js, bsys = BuildChain(config_bodys, config_joints, config_system)
@@ -77,7 +77,7 @@
         return HERKFuncf(bd.bs, bd.js, bd.sys, f_exi)
     end
     # Body operators
-    Mᵢ₋₁ = M⁻¹(bd)
+    Mᵢ₋₁ = M(bd)
     Fᵢ₋₁ = F(bd)
     G₁ᵀᵢ₋₁ = G₁ᵀ(bd)
     # Fluid operators
@@ -105,33 +105,4 @@
     B₂ᵢ = w -> B₂(w,fsys)
     # FSI operators
     T₂ᵢ = u -> T₂(bd,bgs,u);
-
-    # Fill operators into saddle point system
-    S = SaddleSystem((w₀,u,f,λ),
-                 (H, B₁ᵀᵢ₋₁, B₂ᵢ),
-                 (Mᵢ₋₁, G₁ᵀᵢ₋₁, G₂ᵢ),
-                 (T₁ᵀᵢ₋₁, T₂ᵢ))
-
-    # Test all operators
-    S.A⁻¹(w₀)
-    S.B₂(w₀)
-    S.T₂(u)
-    S.M⁻¹(u)
-    S.G₂(u)
-    S.A⁻¹B₁ᵀ(f)
-    S.M⁻¹T₁ᵀ(f)
-    S.M⁻¹G₁ᵀ(λ);
-
-    # Assign right hand side
-    rw₀ = deepcopy(w₀)
-    rw₀.data .= 0.0
-    ru = ones(Float64,6*bd.sys.nbody)
-    rf = deepcopy(f)
-    rλ =zeros(size(λ))
-    rhs = (rw₀, ru, rf, rλ);
-
-    # Solve the system
-    w₀, u, f, λ = S\rhs;
-
-    @test isapprox(sum(f.u),0.0,atol=1e-10)
 end

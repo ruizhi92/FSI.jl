@@ -59,7 +59,7 @@ end
     Oqq = zeros(q,q)
 
     # saddle point system
-    S = [A B₁ᵀ Omp Omq; B₂ Onn -T₂ Onq; Opm T₁ᵀ M G₁ᵀ; Oqm Oqn G₂ Oqq]
+    S = [A B₁ᵀ Omp Omq; B₂ Onn -T₂ Onq; Opm -T₁ᵀ M G₁ᵀ; Oqm Oqn G₂ Oqq]
 
     # rhs
     rċ = rand(m)
@@ -67,8 +67,6 @@ end
     ru̇ = rand(p)
     rλ = rand(q)
     b = [rċ;rf;ru̇;rλ]
-    b1 = [rċ;rf]
-    b2 = [ru̇;rλ]
 
     # test using Julia's default \ solver
     # @test isapprox(norm(S*(S\b)-b),0.0,atol=1e-10)
@@ -82,11 +80,12 @@ end
     λ = zeros(q)
     St = SaddleSystem1d((ċ, f, u̇, λ), (A⁻¹, B₁ᵀ, B₂),
                   (M, G₁ᵀ, G₂), (x->T₁ᵀ*x, x->T₂*x))
-    bt = (rċ, ru̇, rf, rλ);
+    bt = (rċ, rf, ru̇, rλ);
 
     # test using SaddlePointSystems
     aa,bb,cc,dd = St\bt
     x_compute = [aa;bb;cc;dd]
+
     @test isapprox(norm(x_theory-x_compute),0.0,atol=1e-9)
 
 end
@@ -124,7 +123,7 @@ end
     Mf = 1.0/ρb*M
 
     # saddle point system
-    S = [A B₁ᵀ -B₁ᵀ*T₂*Mf Omq; B₂ Onn -T₂ Onq; Opm T₁ᵀ M G₁ᵀ; Oqm Oqn G₂ Oqq]
+    S = [A B₁ᵀ Omp Omq; B₂ Onn -T₂ Onq; Opm -T₁ᵀ M-Mf G₁ᵀ; Oqm Oqn G₂ Oqq]
 
     # rhs
     rċ = rand(m)
@@ -144,9 +143,9 @@ end
     u̇ = zeros(p)
     λ = zeros(q)
     St = SaddleSystem2d((ċ, f, u̇, λ), (A⁻¹, B₁ᵀ, B₂),
-                      (M, G₁ᵀ, G₂), (x->T₁ᵀ*x, x->T₂*x);
-                      ρb=ρb)
-    bt = (rċ, ru̇, rf, rλ);
+                  (M, G₁ᵀ, G₂), (x->T₁ᵀ*x, x->T₂*x);
+                  ρb=ρb)
+    bt = (rċ, rf, ru̇, rλ);
 
     # test using SaddlePointSystems
     aa,bb,cc,dd = St\bt
