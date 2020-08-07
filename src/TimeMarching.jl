@@ -17,7 +17,7 @@ import Dyn3d.TimeMarching.RK31, Dyn3d.TimeMarching.Euler, Dyn3d.TimeMarching.RK4
 
 
 export RKParams, RK31, Euler, RK32, RK4
-export IFHERK_coupled, r₁, U_inf, B₂, B₁ᵀ, plan_constraints
+export IFHERK_coupled, r₁, U_inf, B₂, B₁ᵀ
 export F, G₁ᵀ, G₂, M, gti, UpP, UpV, T₁ᵀ, T₂, getX̃, BodyGridToVectorData
 
 # Functions that get extended by fluid systems
@@ -25,7 +25,6 @@ function r₁ end
 function U_inf end
 function B₂ end
 function B₁ᵀ end
-function plan_constraints end
 
 # function scaffold for rigid body systems
 function M end

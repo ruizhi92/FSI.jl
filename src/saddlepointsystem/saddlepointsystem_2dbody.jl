@@ -171,9 +171,6 @@ function ldiv!(state::Tuple{TC,TF,TU,Tλ},
 
     # correct fluid state and force with moving body effect
     sys.A⁻¹B₁ᵀf .= sys.A⁻¹B₁ᵀ(sys.fbuffer_1)
-    sys.u̇buffer .= sys.Mf*u̇
-    sys.fbuffer_2 .= sys.T₂(sys.u̇buffer)
-    sys.fbuffer_1 .-= sys.fbuffer_2
     ċ .+= sys.A⁻¹B₁ᵀf
     f .-= sys.fbuffer_1
 

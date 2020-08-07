@@ -2,7 +2,6 @@ module SaddlePointSystems
 
 using LinearMaps
 using LinearAlgebra
-using IterativeSolvers
 
 import Base: \,+,*
 import LinearAlgebra: ldiv!, inv

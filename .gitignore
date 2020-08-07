@@ -8,3 +8,4 @@ examples/local_run
 *.cov
 Manifest.toml
 thesis/
+.DS_Store

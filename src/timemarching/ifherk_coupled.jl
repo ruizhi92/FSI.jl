@@ -17,7 +17,6 @@ if applicable.
 - `Δt` : time-step size
 - `plan_intfact` : constructor to set up integrating factor operator for `A` that
               will act on type `u` (by left multiplication) and return same type as `u`
-- `plan_constraints` : constructor to set up the
 - `B₁ᵀ` : operator acting on type `f` and returning type `u`
 - `B₂` : operator acting on type `u` and returning type `f`
 - `r₁` : operator acting on type `u` and `t` and returning `u`
