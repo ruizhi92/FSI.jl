@@ -1,28 +1,29 @@
-using Documenter, Whirl
+using Documenter
+include("../src/FSI.jl")
+using FSI
 
 makedocs(
-    format =:html,
-    sitename = "Whirl.jl",
+    format = :html,
+    sitename = "FSI.jl",
     pages = [
         "Home" => "index.md",
-        "Manual" => ["manual/fields.md",
-                     "manual/bodies.md",
-                     "manual/saddlesystems.md",
-                     "manual/timemarching.md"
+        "Manual" => ["manual/problemsetup.md",
+                    # "manual/timemarching.md",
+                    # "manual/saddlepointsystem.md",
                      ]
-        #"Internals" => [ "internals/properties.md"]
     ],
     assets = ["assets/custom.css"],
     strict = true
 )
 
 
-if "DOCUMENTER_KEY" in keys(ENV)
-    deploydocs(
-     repo = "github.com/jdeldre/Whirl.jl.git",
-     target = "build",
-     deps = nothing,
-     make = nothing,
-     julia = "0.6"
-    )
-end
+# if "DOCUMENTER_KEY" in keys(ENV)
+deploydocs(
+ repo = "github.com/ruizhi92/FSI.jl.git",
+ target = "build",
+ branch = "gh-pages",
+ deps = nothing,
+ make = nothing,
+ julia = "1.3"
+)
+# end

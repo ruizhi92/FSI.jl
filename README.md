@@ -13,10 +13,10 @@ This is a framework for simulating rigid body systems interacting with two-dimen
 Considering the components, rigid body solver take advantage of Dyn3d.jl and incompressible flow solver ViscousFlow.jl.
 The monolithic and versatile algorithm for this solver refers to https://escholarship.org/uc/item/0nq1t5zw
 
-The package is currently stable for Julia 1.3 with some possible warnings, and
-- allow for both passive and active rigid body systems in an incompressible flow
-- allow for both infinitely thin body (1d body) and body with finite area (2d body)
-- allow for arbitrarily small fluid-body density ratios, including zero mass and neutrally buoyant cases
+The package is currently stable for Julia 1.3 with some possible warnings, and it
+- allows for both passive and active rigid body systems in an incompressible flow
+- allows for both infinitely thin body (1d body) and body with finite area (2d body)
+- allows for arbitrarily small fluid-body density ratios, including zero mass and neutrally buoyant cases
 
 
 **FSI.jl** is registered in the general Julia registry. To install, type

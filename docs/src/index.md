@@ -1,45 +1,34 @@
-# Whirl
+# FSI.jl
 
-*a framework for simulating viscous incompressible flows*
+*A framework for simulating rigid body systems dynamically interacting with viscous incompressible flows*
 
-The objective of this package is to allow easy setup and fast simulation of incompressible
-flows, particularly those past bodies in motion. The package provides
-tools for
-- constructing grids and body shapes,
-- using the operators on those grids,
-- specifying the relevant parameters and setting their values,
-- solving the problem, and finally,
-- visualizing and analyzing the results.
+## About the package
 
-The underlying grids are uniform and Cartesian, allowing the use of the lattice
-Green's function (LGF) for inverting the Poisson equation; the diffusion operators are
-solved with the integrating factor (Liska and Colonius ref). Many of the core aspects
-of the fluid-body interaction are based on the immersed boundary projection method,
-developed by Taira and Colonius (ref). The coupled fluid-body interactions are based
-on the work of Wang and Eldredge (ref).
+This is a framework for simulating rigid body systems interacting with two-dimensional flow, i.e. Fluid-Structure Interaction (FSI).
+Considering the components, rigid body solver take advantage of Dyn3d.jl and incompressible flow solver ViscousFlow.jl.
+The FSI solver is monolithic (fully-coupled), i.e. all unknowns in the fluid-body system are solved simultaneously.
 
+The package is currently stable for Julia 1.3 with some possible warnings, and it
+- allows for both passive and active rigid body systems in an incompressible flow
+- allows for both infinitely thin body (1d body) and body with finite area (2d body)
+- allows for arbitrarily small fluid-body density ratios, including zero mass and neutrally buoyant cases
+
+
+![](https://github.com/ruizhi92/FSI.jl/raw/master/example_gif.gif)
 
 ## Installation
 
-This package requires Julia `0.6` and above.
-To install, simply run
+This package supports *Julia* 1.3 version for now. Possible warnings may show up but
+**FSI.jl** is registered in the general Julia registry. To install, type
+e.g.,
 ```julia
-julia> Pkg.clone("https://github.com/jdeldre/Whirl.jl.git","Whirl")
+] add FSI
 ```
-in the Julia REPL.
-Since this package is still under heavy development, you should run
+
+Then, in any version, type
 ```julia
-julia> Pkg.test("Whirl") # might take some time
+julia> using FSI
 ```
-to make sure things are working as intended and
-```julia
-julia> Pkg.update()
-```
-to get the most recent version of the library and its dependencies.
+## References
 
-The plots in this documentation are generated using [Plots.jl](http://docs.juliaplots.org/latest/).
-You might want to install that too to follow the examples.
-
-## Basic Usage
-
-Do something here.
+[^1]: Ruizhi Yang and Jeff Eldredge https://escholarship.org/uc/item/0nq1t5zw
