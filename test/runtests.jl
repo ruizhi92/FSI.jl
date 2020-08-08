@@ -1,4 +1,4 @@
-using FSI
+using FSInteraction
 using Test
 using LinearMaps
 using LinearAlgebra

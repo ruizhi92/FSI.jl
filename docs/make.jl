@@ -1,10 +1,10 @@
 using Documenter
-include("../src/FSI.jl")
-using FSI
+include("../src/FSInteraction.jl")
+using FSInteraction
 
 makedocs(
     format = :html,
-    sitename = "FSI.jl",
+    sitename = "FSInteraction.jl",
     pages = [
         "Home" => "index.md",
         "Manual" => ["manual/problemsetup.md",
@@ -19,7 +19,7 @@ makedocs(
 
 # if "DOCUMENTER_KEY" in keys(ENV)
 deploydocs(
- repo = "github.com/ruizhi92/FSI.jl.git",
+ repo = "github.com/ruizhi92/FSInteraction.jl.git",
  target = "build",
  branch = "gh-pages",
  deps = nothing,

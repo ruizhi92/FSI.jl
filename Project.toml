@@ -1,4 +1,4 @@
-name = "FSI"
+name = "FSInteraction"
 uuid = "39fdbc7a-862a-11e9-015b-61723af7393f"
 authors = ["fs <rzyang92@gmail.com>"]
 version = "0.1.0"

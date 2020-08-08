@@ -1,11 +1,11 @@
-# FSI.jl
+# FSInteraction.jl
 
 _A framework for simulating rigid body systems dynamically interacting with viscous incompressible flows_
 
 
-[![](https://img.shields.io/badge/docs-latest-blue.svg)](https://ruizhi92.github.io/FSI.jl/latest)
-[![Build Status](https://travis-ci.org/ruizhi92/FSI.jl.png?branch=master)](https://travis-ci.org/ruizhi92/FSI.jl)
-[![Build status](https://ci.appveyor.com/api/projects/status/o7du221qb5fqa5s1/branch/master?svg=true)](https://ci.appveyor.com/project/ruizhi92/fsi-jl/branch/master)
+[![](https://img.shields.io/badge/docs-latest-blue.svg)](https://ruizhi92.github.io/FSInteraction.jl/latest)
+[![Build Status](https://travis-ci.org/ruizhi92/FSInteraction.jl.png?branch=master)](https://travis-ci.org/ruizhi92/FSInteraction.jl)
+[![Build status](https://ci.appveyor.com/api/projects/status/o7du221qb5fqa5s1/branch/master?svg=true)](https://ci.appveyor.com/project/ruizhi92/fsinteraction-jl/branch/master)
 
 ## About the package
 
@@ -19,16 +19,16 @@ The package is currently stable for Julia 1.3 with some possible warnings, and i
 - allows for arbitrarily small fluid-body density ratios, including zero mass and neutrally buoyant cases
 
 
-**FSI.jl** is registered in the general Julia registry. To install, type
+**FSInteraction.jl** is registered in the general Julia registry. To install, type
 e.g.,
 ```julia
-] add FSI
+] add FSInteraction
 ```
 
 Then, in any version, type
 ```julia
-julia> using FSI
+julia> using FSInteraction
 ```
 See the example Jupyter notebooks in the examples folder.
 
-![](https://github.com/ruizhi92/FSI.jl/raw/master/example_gif.gif)
+![](https://github.com/ruizhi92/FSInteraction.jl/raw/master/example_gif.gif)

@@ -1,4 +1,4 @@
-# FSI.jl
+# FSInteraction.jl
 
 *A framework for simulating rigid body systems dynamically interacting with viscous incompressible flows*
 
@@ -6,7 +6,7 @@
 
 This is a framework for simulating rigid body systems interacting with two-dimensional flow, i.e. Fluid-Structure Interaction (FSI).
 Considering the components, rigid body solver take advantage of Dyn3d.jl and incompressible flow solver ViscousFlow.jl.
-The FSI solver is monolithic (fully-coupled), i.e. all unknowns in the fluid-body system are solved simultaneously.
+The FSInteraction solver is monolithic (fully-coupled), i.e. all unknowns in the fluid-body system are solved simultaneously.
 
 The package is currently stable for Julia 1.3 with some possible warnings, and it
 - allows for both passive and active rigid body systems in an incompressible flow
@@ -14,20 +14,20 @@ The package is currently stable for Julia 1.3 with some possible warnings, and i
 - allows for arbitrarily small fluid-body density ratios, including zero mass and neutrally buoyant cases
 
 
-![](https://github.com/ruizhi92/FSI.jl/raw/master/example_gif.gif)
+![](https://github.com/ruizhi92/FSInteraction.jl/raw/master/example_gif.gif)
 
 ## Installation
 
 This package supports *Julia* 1.3 version for now. Possible warnings may show up but
-**FSI.jl** is registered in the general Julia registry. To install, type
+**FSInteraction.jl** is registered in the general Julia registry. To install, type
 e.g.,
 ```julia
-] add FSI
+] add FSInteraction
 ```
 
 Then, in any version, type
 ```julia
-julia> using FSI
+julia> using FSInteraction
 ```
 ## References
 

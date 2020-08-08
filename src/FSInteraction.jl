@@ -1,4 +1,4 @@
-module FSI
+module FSInteraction
 
 using Reexport
 
@@ -16,7 +16,7 @@ using Reexport
 @reexport using ViscousFlow.Fields
 @reexport using ViscousFlow.RigidBodyMotions
 
-# modules from FSI
+# modules from FSInteraction
 include("SaddlePointSystems.jl")
 @reexport using .SaddlePointSystems
 

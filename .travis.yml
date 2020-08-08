@@ -16,6 +16,6 @@ addons:
 after_success:
   # deploy docs
   - julia -e 'Pkg.add("Documenter")'
-  - julia -e 'cd(dirname(pathof(FSI))); include(joinpath("docs", "make.jl"))'
+  - julia -e 'cd(dirname(pathof(FSInteraction))); include(joinpath("docs", "make.jl"))'
   # push coverage results to Codecov
-  - julia -e 'cd(dirname(pathof(FSI))); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
+  - julia -e 'cd(dirname(pathof(FSInteraction))); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
